@@ -1,16 +1,14 @@
-require 'rspec/core/rake_task'
-
-desc "Run unit specifications"
-RSpec::Core::RakeTask.new do |spec|
-  spec.rspec_opts = %w(-fs --color)
-  spec.pattern = FileList['spec/**/*_spec.rb']
+require 'rake/testtask'
+Rake::TestTask.new do |t|
+  t.pattern = "test/*_test.rb"
+  t.libs.push "test"
 end
 
-task :coverage => [:coverage_env, :spec]
+task :default => :test
+task :spec => :test
+
+task :coverage => [:coverage_env, :test]
 
 task :coverage_env do
-  ENV['COVERAGE'] = '1'
+  ENV['COVERAGE'] = 'true'
 end
-
-task :test => :spec
-task :default => :spec

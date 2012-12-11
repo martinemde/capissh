@@ -10,7 +10,7 @@ module Capissh
   class Command
     include Processable
 
-    attr_reader :tree, :sessions, :options
+    attr_reader :commands_for, :sessions, :options
 
     class << self
       attr_accessor :default_io_proc
@@ -18,7 +18,7 @@ module Capissh
 
     self.default_io_proc = Proc.new do |ch, stream, out|
       level = stream == :err ? :important : :info
-      ch[:options][:logger].send(level, out, "#{stream} :: #{ch[:server]}")
+      ch[:logger].send(level, out, "#{stream} :: #{ch[:server]}")
     end
 
     def self.process(tree, sessions, options={})
@@ -30,7 +30,7 @@ module Capissh
     # session instances, and +options+ must be a hash containing any of the
     # following keys:
     #
-    # * +shell+: (optional), the shell command string (eg. 'bash') or false
+    # * +shell+: (optional), the shell (eg. 'bash') or false. Default: 'sh'
     # * +logger+: (optional), a Capissh::Logger instance
     # * +data+: (optional), a string to be sent to the command via it's stdin
     # * +eof+: (optional), close stdin after sending data
@@ -39,16 +39,19 @@ module Capissh
     # * +pty+: (optional), execute the command in a pty
     def initialize(tree, sessions, options={}, &block)
       if String === tree
-        @command_callback_pairs = lambda { |server| [[tree, block || self.class.default_io_proc]] }
+        tree = Tree.new(nil) { |t| t.else(tree, &block) }
       elsif block
         raise ArgumentError, "block given with tree argument"
-      else
-        @command_callback_pairs = lambda { |server| tree.branches_for(server).map { |branch| [branch.command, branch.callback] } }
       end
 
-      @role_names = lambda { |server| tree.respond_to?(:configuration) && tree.configuration && tree.configuration.role_names_for_host(server).join(',') }
-      @sessions = sessions
+      @commands_for = lambda { |server| tree.branches_for(server).map { |branch| [branch.command, branch.callback] } }
+
+      if tree.respond_to?(:configuration) && tree.configuration
+        @command_mutator = tree.configuration.command_mutator
+      end
+
       @options = options
+      @sessions = sessions
       @channels = open_channels
     end
 
@@ -58,14 +61,19 @@ module Capissh
     def process!
       elapsed = Benchmark.realtime do
         loop do
-          break unless process_iteration { @channels.any? { |ch| !ch[:closed] } }
+          break unless process_iteration { active? }
         end
       end
 
       logger.trace "command finished in #{(elapsed * 1000).round}ms" if logger
 
-      if (failed = @channels.select { |ch| ch[:status] != 0 }).any?
-        commands = failed.inject({}) { |map, ch| (map[ch[:command]] ||= []) << ch[:server]; map }
+      failed = @channels.select { |ch| ch[:status] != 0 }
+      if failed.any?
+        commands = failed.inject({}) do |map, ch|
+          map[ch[:command]] ||= []
+          map[ch[:command]] << ch[:server]
+          map
+        end
         message = commands.map { |command, list| "#{command.inspect} on #{list.join(',')}" }.join("; ")
         error = CommandError.new("failed: #{message}")
         error.hosts = commands.values.flatten
@@ -73,6 +81,10 @@ module Capissh
       end
 
       self
+    end
+
+    def active?
+      @channels.any? { |ch| !ch[:closed] }
     end
 
     # Force the command to stop processing, by closing all open channels
@@ -92,18 +104,18 @@ module Capissh
       def open_channels
         sessions.map do |session|
           server = session.xserver
-          @command_callback_pairs.call(server).map do |base_command, io_proc|
+          @commands_for.call(server).map do |base_command, io_proc|
             session.open_channel do |channel|
               channel[:server] = server
-              channel[:host] = server.host
               channel[:options] = options
+              channel[:logger] = logger
               channel[:base_command] = base_command
               channel[:io_proc] = io_proc
 
               request_pty_if_necessary(channel) do |ch|
                 logger.trace "executing command", ch[:server] if logger
 
-                command_line = make_command(channel[:base_command], channel[:server], channel[:host])
+                command_line = compose_command(channel[:base_command], channel[:server])
                 channel[:command] = command_line
 
                 ch.exec(command_line)
@@ -149,8 +161,12 @@ module Capissh
         end
       end
 
-      def make_command(base_command, server, host)
-        cmd = replace_placeholders(base_command, server, host)
+      def compose_command(cmd, server)
+        if @command_mutator # FIXME: It's confusing to require the return value with it named like this.
+          cmd = @command_mutator.call(cmd, server)
+        end
+
+        cmd = cmd.strip.gsub(/\r?\n/, "\\\n")
 
         if options[:shell] == false
           shell = nil
@@ -161,13 +177,6 @@ module Capissh
         end
 
         [environment, shell, cmd].compact.join(" ")
-      end
-
-      def replace_placeholders(command, server, host)
-        roles = @role_names && @role_names.call(server)
-        command = command.gsub(/\$CAPISTRANO:HOST\$/, host)
-        command.gsub!(/\$CAPISTRANO:HOSTROLES\$/, roles) if roles
-        command
       end
 
       # prepare a space-separated sequence of variables assignments

@@ -1,4 +1,3 @@
-
 module Capissh
   class Command
     class Tree
@@ -14,7 +13,7 @@ module Capissh
 
         def initialize(command, options, callback)
           @command = command.strip.gsub(/\r?\n/, "\\\n")
-          @callback = callback || Capissh::Configuration.default_io_proc
+          @callback = callback || Capissh::Command.default_io_proc
           @options = options
           @skip = false
         end

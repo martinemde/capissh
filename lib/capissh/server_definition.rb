@@ -31,10 +31,40 @@ module Capissh
       ENV['USER'] || ENV['USERNAME'] || "not-specified"
     end
 
-    attr_reader :user, :host, :port, :options
+    attr_reader :user, :host, :port, :options, :server
 
-    def initialize(string, options={})
-      @user, @host, @port = string.match(/^(?:([^;,:=]+)@|)(.*?)(?::(\d+)|)$/)[1,3]
+    # Initialize a ServerDefinition with a string or object that describes the
+    # authority URI part, "user@host:port", for connecting with SSH.
+    #
+    # Any object that responds to the following methods, in order of priority,
+    # can be used in a ServerDefinition:
+    #
+    # 1. #host, #user (optional), and #port (optional, default: 22)
+    # 2. #authority - responding with something like "[user@]host[:port]"
+    # 3. #to_s      - responding with something like "[user@]host[:port]"
+    #
+    # If options are passed for the second argument, certain keys will be used:
+    #
+    # * :user - sets the user if one was not given in the authority
+    # * :port - sets the port if one was not given in the authority
+    # * :ssh_options - used for connecting with Net::SSH
+    def initialize(server, options={})
+      @server = server
+
+      if @server.respond_to?(:host)
+        @host = @server.host
+        @port = @server.port if @server.respond_to?(:port)
+        @user = @server.user if @server.respond_to?(:user)
+      else
+        if @server.respond_to?(:authority)
+          string = @server.authority
+        elsif @server.respond_to?(:to_s)
+          string = @server.to_s
+        else
+          raise ArgumentError, "Invalid server for ServerDefinition: #{@server.inspect}. Must respond to #host, #authority, or #to_s"
+        end
+        @user, @host, @port = string.match(/^(?:([^;,:=]+)@|)(.*?)(?::(\d+)|)$/)[1,3]
+      end
 
       @options = options.dup
       user_opt, port_opt = @options.delete(:user), @options.delete(:port)

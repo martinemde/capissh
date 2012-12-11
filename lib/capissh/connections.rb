@@ -65,7 +65,7 @@ module Capissh
     end
 
     # Instantiates a new connections manager object.
-    # +options+ must be a hash containing any of the # following keys:
+    # +options+ must be a hash containing any of the following keys:
     #
     # * +gateway+: (optional), ssh gateway
     # * +logger+: (optional), a Capissh::Logger instance
@@ -80,16 +80,9 @@ module Capissh
     def initialize(options={})
       @options = options.dup
       @gateway = @options.delete(:gateway)
-      @logger  = @options[:logger] || Capissh::Logger.new(:level => 3)
+      @logger  = @options[:logger] || Capissh::Logger.default
       Thread.current[:sessions] = {}
       Thread.current[:failed_sessions] = []
-    end
-
-    def run(cmd, options={})
-      execute_on_servers(options) do |servers| # FIXME: execute_on_servers
-        targets = servers.map { |s| sessions[s] } # FIXME: sessions
-        Command.process(cmd, targets, options.merge(:logger => logger))
-      end
     end
 
     attr_reader :logger
@@ -117,8 +110,8 @@ module Capissh
     # Connections are normally made lazily in Capissh--you can use this
     # to force them open before performing some operation that might be
     # time-sensitive.
-    def connect!(options={})
-      execute_on_servers(options) { }
+    def connect!(servers, options={})
+      execute_on_servers(servers, options) { }
     end
 
     # Returns the object responsible for establishing new SSH connections.
@@ -137,22 +130,25 @@ module Capissh
 
     # Ensures that there are active sessions for each server in the list.
     def establish_connections_to(servers)
-      failed_servers = []
-
       # force the connection factory to be instantiated synchronously,
       # otherwise we wind up with multiple gateway instances, because
       # each connection is done in parallel.
       connection_factory
 
-      threads = Array(servers).map { |server| establish_connection_to(server, failed_servers) }
+      failed_servers = []
+      servers_array = Array(servers)
+
+      threads = servers_array.map { |server| establish_connection_to(server, failed_servers) }
       threads.each { |t| t.join }
 
       if failed_servers.any?
-        errors = failed_servers.map { |h| "#{h[:server]} (#{h[:error].class}: #{h[:error].message})" }
-        error = ConnectionError.new("connection failed for: #{errors.join(', ')}")
-        error.hosts = failed_servers.map { |h| h[:server] }
+        messages = failed_servers.map { |h| "#{h[:server]} (#{h[:error].class}: #{h[:error].message})" }
+        error = ConnectionError.new("connection failed for: #{messages.join(', ')}")
+        error.hosts = failed_servers.map { |h| h[:server] }.each {|server| failed!(server) }
         raise error
       end
+
+      servers_array.map {|server| sessions[server] }
     end
 
     # Destroys sessions for each server in the list.
@@ -166,37 +162,44 @@ module Capissh
       end
     end
 
-    # Determines the set of servers within the current task's scope and
-    # establishes connections to them, and then yields that list of
-    # servers.
+    # Determines the set of servers and establishes connections to them,
+    # and then yields that list of servers.
     #
     # All options will be used to find servers. (see find_servers)
-    # The additional options below will also be used:
+    #
+    # The additional options below will also be used as follows:
     #
     # * +on_no_matching_servers+: (optional), set to :continue to return
     #   instead of raising when no servers are found
-    # * +once+: (optional), if truthy, runs the command on only one server
     # * +max_hosts+: (optional), integer to batch commands in chunks of hosts
     # * +continue_on_error+: (optionsal), continue on connection errors
     #
-    def execute_on_servers(options={}, &block)
+    def execute_on_servers(servers, options={}, &block)
       raise ArgumentError, "expected a block" unless block_given?
 
-      #servers = find_servers(options) # FIXME: find_servers
-      servers = [ServerDefinition.new('deploy@ec2-184-73-243-165.compute-1.amazonaws.com')]
-      if servers.empty?
-        raise Capissh::NoMatchingServersError, "no servers found to match #{options.inspect}" if options[:on_no_matching_servers] != :continue
+      connect_to_servers = ServerDefinition.wrap_list(*servers)
+
+      if options[:continue_on_error]
+        connect_to_servers.delete_if { |s| has_failed?(s) }
+      end
+
+      if connect_to_servers.empty?
+        raise Capissh::NoMatchingServersError, "no servers found to match #{options.inspect}" unless options[:continue_on_no_matching_servers]
         return
       end
 
-      servers = [servers.first] if options[:once]
-      logger.trace "servers: #{servers.map { |s| s.host }.inspect}"
+      logger.trace "servers: #{connect_to_servers.map { |s| s.host }.inspect}"
 
-      max_hosts = (options[:max_hosts] || servers.size).to_i
-      is_subset = max_hosts < servers.size
+      max_hosts = (options[:max_hosts] || connect_to_servers.size).to_i
+      is_subset = max_hosts < connect_to_servers.size
+
+      if max_hosts <= 0
+        raise Capissh::NoMatchingServersError, "max_hosts is invalid for #{options.inspect}" unless options[:continue_on_no_matching_servers]
+        return
+      end
 
       # establish connections to those servers in groups of max_hosts, as necessary
-      servers.each_slice(max_hosts) do |servers_slice|
+      connect_to_servers.each_slice(max_hosts) do |servers_slice|
         begin
           establish_connections_to(servers_slice)
         rescue ConnectionError => error
@@ -208,7 +211,7 @@ module Capissh
         end
 
         begin
-          yield servers_slice
+          yield servers_slice.map { |server| sessions[server] }
         rescue RemoteError => error
           raise error unless options[:continue_on_error]
           error.hosts.each { |h| failed!(h) }
@@ -232,7 +235,7 @@ module Capissh
     end
 
     def safely_establish_connection_to(server, thread, failures=nil)
-      thread[:sessions] ||= {}
+      thread[:sessions] ||= {} # can this move up to the current_thread part above?
       thread[:sessions][server] ||= connection_factory.connect_to(server)
     rescue Exception => err
       raise unless failures

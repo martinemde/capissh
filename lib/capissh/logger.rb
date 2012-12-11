@@ -60,6 +60,10 @@ module Capissh
         # Sort matchers in reverse order so we can break if we found a match.
         @sorted_formatters ||= @formatters.sort_by { |i| -(i[:priority] || i[:prio] || 0) }
       end
+
+      def default
+        @default ||= new(:level => 3)
+      end
     end
 
     def initialize(options={})
@@ -82,7 +86,7 @@ module Capissh
 
     def log(level, message, line_prefix=nil)
       if level <= self.level
-        # Only format output if device is a TTY or formatters are not disabled
+        # Only format output if device is a TTY and formatters are not disabled
         if device.tty? && !@disable_formatters
           color = :none
           style = nil

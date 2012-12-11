@@ -4,10 +4,10 @@ $:.unshift lib unless $:.include?(lib)
 require 'capissh/version'
 
 Gem::Specification.new do |s|
-  s.name = "engineyard"
+  s.name = "capissh"
   s.version = Capissh::VERSION
   s.platform = Gem::Platform::RUBY
-  s.authors = ["Jamis Buck", "Martin Emde"]
+  s.authors = ["Martin Emde"]
   s.email = "martin.emde@gmail.com"
   s.homepage = "http://github.com/martinemde/capissh"
   s.summary = "Extraction of Capistrano's parallel SSH command execution"
@@ -23,4 +23,7 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency('rspec', '~>2.0')
   s.add_development_dependency('rake')
+  s.add_development_dependency('minitest')
+  s.add_development_dependency('mocha')
+  s.add_development_dependency('simplecov')
 end
