@@ -26,19 +26,19 @@ module Capissh
           @options[:logger].debug "Creating multiple gateways using #{gateway.inspect}" if @options[:logger]
           gateway.each do |gw, hosts|
             gateway_connection = add_gateway(gw)
-            [*hosts].each do |host|
+            Array(hosts).each do |host|
               @gateways[:default] ||= gateway_connection
               @gateways[host] = gateway_connection
             end
           end
         else
-          @options[:logger].debug "Creating gateway using #{[*gateway].join(', ')}" if @options[:logger]
+          @options[:logger].debug "Creating gateway using #{Array(gateway).join(', ')}" if @options[:logger]
           @gateways[:default] = add_gateway(gateway)
         end
       end
 
       def add_gateway(gateway)
-        gateways = [*gateway].collect { |g| ServerDefinition.new(g) }
+        gateways = Array(gateway).collect { |g| ServerDefinition.new(g) }
         tunnel = SSH.connection_strategy(gateways[0], @options) do |host, user, connect_options|
           Net::SSH::Gateway.new(host, user, connect_options)
         end
