@@ -10,19 +10,29 @@ module Capissh
   class Command
     include Processable
 
-    attr_reader :commands_for, :sessions, :options
+    attr_reader :tree, :sessions, :options
 
     class << self
       attr_accessor :default_io_proc
+
+      def process_tree(tree, sessions, options={})
+        new(tree, sessions, options).process!
+      end
+      alias process process_tree
+
+      # Convenience method to process a command given as a string
+      # rather than a Command::Tree.
+      def process_string(string, sessions, options={}, &block)
+        tree = Tree.twig(nil, string, &block)
+        process_tree(tree, sessions, options)
+      end
     end
 
     self.default_io_proc = Proc.new do |ch, stream, out|
-      level = stream == :err ? :important : :info
-      ch[:logger].send(level, out, "#{stream} :: #{ch[:server]}")
-    end
-
-    def self.process(tree, sessions, options={})
-      new(tree, sessions, options).process!
+      if ch[:logger]
+        level = stream == :err ? :important : :info
+        ch[:logger].send(level, out, "#{stream} :: #{ch[:server]}")
+      end
     end
 
     # Instantiates a new command object. The +command+ must be a string
@@ -37,14 +47,8 @@ module Capissh
     # * +env+: (optional), a string or hash to be interpreted as environment
     #   variables that should be defined for this command invocation.
     # * +pty+: (optional), execute the command in a pty
-    def initialize(tree, sessions, options={}, &block)
-      if String === tree
-        tree = Tree.new(nil) { |t| t.else(tree, &block) }
-      elsif block
-        raise ArgumentError, "block given with tree argument"
-      end
-
-      @commands_for = lambda { |server| tree.branches_for(server).map { |branch| [branch.command, branch.callback] } }
+    def initialize(tree, sessions, options={})
+      @tree = tree
 
       if tree.respond_to?(:configuration) && tree.configuration
         @command_mutator = tree.configuration.command_mutator
@@ -104,7 +108,7 @@ module Capissh
       def open_channels
         sessions.map do |session|
           server = session.xserver
-          @commands_for.call(server).map do |base_command, io_proc|
+          @tree.base_command_and_callback(server).map do |base_command, io_proc|
             session.open_channel do |channel|
               channel[:server] = server
               channel[:options] = options

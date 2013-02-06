@@ -1,4 +1,4 @@
-#
+# NOTES
 #
 # Parts
 #
@@ -11,8 +11,6 @@
 # * Connection - A connection to a server definition that is held for reuse
 # * Connection pool - All the connections so persistent connections can be found
 # * Connection factory - Creates a persistent connection from a server definition
-#
-#
 #
 # Set of servers
 # Command
@@ -35,15 +33,8 @@
 # Yielding expects each server to run the command given (or maybe it just has the
 # chance to modify the command?)
 #
-# def fan(servers, tree)
-#   servers.each do |server|
-#     things = tree.things_to_run_on_server(server)
-#     server.run_this(things) # or runner.run(server, things)
-#   end
-# end
 
 require 'capissh/configuration'
-require 'capissh/command'
 
 module Capissh
   def self.new(*args)

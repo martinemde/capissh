@@ -3,15 +3,15 @@ require 'capissh/command'
 require 'capissh/connections'
 
 module Capissh
-  # Represents a specific Capissh configuration. A Configuration instance
-  # may be used to load multiple recipe files, define and describe tasks,
-  # define roles, and set configuration variables.
+  # Represents a specific Capissh configuration.
   class Configuration
 
-    def self.command_mutator
-      proc do |command, server|
-        command.gsub(/\$CAPISSH:HOST\$/, server.host)
-      end
+    class << self
+      attr_accessor :default_command_mutator
+    end
+
+    self.default_command_mutator = proc do |command, server|
+      command.gsub(/\$CAPISSH:HOST\$/, server.host)
     end
 
     attr_accessor :debug, :logger, :dry_run, :preserve_roles, :options, :command_mutator
@@ -24,7 +24,7 @@ module Capissh
       @logger = Capissh::Logger.new(@options)
       @default_environment = {}
       @default_run_options = {}
-      @command_mutator = @options.delete(:command_mutator) || self.class.command_mutator
+      @command_mutator = @options.delete(:command_mutator) || self.class.default_command_mutator
     end
 
     def connections
@@ -43,12 +43,10 @@ module Capissh
     #
     # Example:
     #
-    #   task :restart_everything do
-    #     parallel do |session|
-    #       session.when "in?(:app)", "/path/to/restart/mongrel"
-    #       session.when "in?(:web)", "/path/to/restart/apache"
-    #       session.when "in?(:db)", "/path/to/restart/mysql"
-    #     end
+    #   parallel do |session|
+    #     session.when "in?(:app)", "/path/to/restart/mongrel"
+    #     session.when "in?(:web)", "/path/to/restart/apache"
+    #     session.when "in?(:db)", "/path/to/restart/mysql"
     #   end
     #
     # Each command may have its own callback block, for capturing and
@@ -156,11 +154,11 @@ module Capissh
     # variable, they will apply for all invocations of #run, #invoke_command,
     # and #parallel.
     def run(servers, cmd, options={}, &block)
-      if options[:eof].nil? && !cmd.include?(sudo)
+      if options[:eof].nil? && !cmd.include?(sudo_command)
         options = options.merge(:eof => !block_given?)
       end
       block ||= Command.default_io_proc
-      tree = Command::Tree.new(self) { |t| t.else(cmd, &block) }
+      tree = Command::Tree.twig(self, cmd, &block)
       run_tree(servers, tree, options)
     end
 
@@ -184,7 +182,7 @@ module Capissh
       options = add_default_command_options(options)
 
       tree.each do |branch|
-        if branch.command.include?(sudo)
+        if branch.command.include?(sudo_command)
           branch.callback = sudo_behavior_callback(branch.callback)
         end
       end
@@ -305,12 +303,12 @@ module Capissh
 
     def continue_execution_for_branch(branch)
       case Capissh::CLI.debug_prompt(branch)
-        when "y"
-          true
-        when "n"
-          false
-        when "a"
-          exit(-1)
+      when "y"
+        true
+      when "n"
+        false
+      when "a"
+        exit(-1)
       end
     end
   end

@@ -86,6 +86,11 @@ module Capissh
         end
       end
 
+      # A tree with only one branch.
+      def self.twig(config, command, &block)
+        new(config) { |t| t.else(command, &block) }
+      end
+
       def initialize(config)
         @configuration = config
         @branches = []
@@ -109,7 +114,18 @@ module Capissh
         end
 
         matches << fallback if matches.empty? && fallback
+
         return matches
+      end
+
+      def base_command_and_callback(server)
+        branches_for(server).map do |branch|
+          command = branch.command
+          if configuration
+            command = configuration.command_mutator.call(command, server)
+          end
+          [command, branch.callback]
+        end
       end
 
       def each
