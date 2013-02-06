@@ -37,6 +37,13 @@ module Capissh
       end
     end
 
+    def self.gateway(gateway, options={})
+      connection_strategy(gateway, options) do |host, user, connection_options|
+        connection = Net::SSH::Gateway.new(host, user, connection_options)
+        Server.apply_to(connection, gateway)
+      end
+    end
+
     # Abstracts the logic for establishing an SSH connection (which includes
     # testing for connection failures and retrying with a password, and so forth,
     # mostly made complicated because of the fact that some of these variables

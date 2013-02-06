@@ -22,45 +22,50 @@ module Capissh
         @options = options
         Thread.abort_on_exception = true
         @gateways = {}
+        @default_gateway = nil
         if gateway.is_a?(Hash)
           @options[:logger].debug "Creating multiple gateways using #{gateway.inspect}" if @options[:logger]
           gateway.each do |gw, hosts|
             gateway_connection = add_gateway(gw)
             Array(hosts).each do |host|
-              @gateways[:default] ||= gateway_connection
+              # Why is the default only set if there's at least one host?
+              # It seems odd enough to be intentional, since it could easily be set outside of the loop.
+              @default_gateway ||= gateway_connection
               @gateways[host] = gateway_connection
             end
           end
         else
           @options[:logger].debug "Creating gateway using #{Array(gateway).join(', ')}" if @options[:logger]
-          @gateways[:default] = add_gateway(gateway)
+          @default_gateway = add_gateway(gateway)
         end
       end
 
       def add_gateway(gateway)
-        gateways = Array(gateway).collect { |g| ServerDefinition.new(g) }
-        tunnel = SSH.connection_strategy(gateways[0], @options) do |host, user, connect_options|
-          Net::SSH::Gateway.new(host, user, connect_options)
-        end
-        (gateways[1..-1]).inject(tunnel) do |tunnel, destination|
+        gateways = ServerDefinition.wrap_list(gateway)
+
+        tunnel = SSH.gateway(gateways.shift, @options)
+
+        gateways.inject(tunnel) do |tunnel, destination|
           @options[:logger].debug "Creating tunnel to #{destination}" if @options[:logger]
-          local_host = ServerDefinition.new("127.0.0.1", :user => destination.user, :port => tunnel.open(destination.host, (destination.port || 22)))
-          SSH.connection_strategy(local_host, @options) do |host, user, connect_options|
-            Net::SSH::Gateway.new(host, user, connect_options)
-          end
+          local = local_host(destination, tunnel)
+          SSH.gateway(local, @options)
         end
       end
 
       def connect_to(server)
         @options[:logger].debug "establishing connection to `#{server}' via gateway" if @options[:logger]
-        local_host = ServerDefinition.new("127.0.0.1", :user => server.user, :port => gateway_for(server).open(server.host, server.port || 22))
-        session = SSH.connect(local_host, @options)
+        local = local_host(server, gateway_for(server))
+        session = SSH.connect(local, @options)
         session.xserver = server
         session
       end
 
+      def local_host(destination, tunnel)
+        ServerDefinition.new("127.0.0.1", :user => destination.user, :port => tunnel.open(destination.host, destination.connect_to_port))
+      end
+
       def gateway_for(server)
-        @gateways[server.host] || @gateways[:default]
+        @gateways[server.host] || @default_gateway
       end
     end
 
