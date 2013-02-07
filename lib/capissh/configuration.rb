@@ -1,6 +1,6 @@
 require 'capissh/logger'
 require 'capissh/command'
-require 'capissh/connections'
+require 'capissh/connection_manager'
 
 module Capissh
   # Represents a specific Capissh configuration.
@@ -27,8 +27,8 @@ module Capissh
       @command_mutator = @options.delete(:command_mutator) || self.class.default_command_mutator
     end
 
-    def connections
-      @connections ||= Connections.new(@options.merge(:logger => @logger))
+    def connection_manager
+      @connection_manager ||= ConnectionManager.new(@options.merge(:logger => @logger))
     end
 
     def fetch(*args)
@@ -187,7 +187,7 @@ module Capissh
         end
       end
 
-      connections.execute_on_servers(servers, options) do |sessions|
+      connection_manager.execute_on_servers(servers, options) do |sessions|
         Command.process(tree, sessions, options.merge(:logger => logger))
       end
     end

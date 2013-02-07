@@ -102,7 +102,6 @@ class SSHTest < MiniTest::Unit::TestCase
     Net::SSH.expects(:start).with(@server.host, "default-user", @options).returns(success = Object.new)
     assert_equal success, Capissh::SSH.connect(@server)
     assert success.respond_to?(:xserver)
-    assert success.respond_to?(:xserver)
     assert_equal success.xserver, @server
   end
 

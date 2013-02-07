@@ -6,7 +6,7 @@ require 'capissh/server_definition'
 require 'capissh/logger'
 
 module Capissh
-  class Connections
+  class ConnectionManager
     class DefaultConnectionFactory
       def initialize(options)
         @options = options
@@ -69,7 +69,7 @@ module Capissh
       end
     end
 
-    # Instantiates a new connections manager object.
+    # Instantiates a new ConnectionManager object.
     # +options+ must be a hash containing any of the following keys:
     #
     # * +gateway+: (optional), ssh gateway
