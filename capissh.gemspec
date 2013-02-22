@@ -19,9 +19,9 @@ Gem::Specification.new do |s|
   s.test_files = Dir.glob("spec/**/*")
 
   s.add_runtime_dependency('net-ssh', "~> 2.2.1")
-  s.add_runtime_dependency('net-ssh-gateway', ">= 1.1.0")
-  s.add_runtime_dependency('net-sftp', ">= 2.0.0")
-  s.add_runtime_dependency('net-scp', ">= 1.0.0")
+  s.add_runtime_dependency('net-ssh-gateway', "~> 1.1.0")
+  s.add_runtime_dependency('net-sftp', "~> 2.0.0")
+  s.add_runtime_dependency('net-scp', "~> 1.0.0")
 
   s.add_development_dependency('rspec', '~>2.0')
   s.add_development_dependency('rake')
