@@ -42,8 +42,8 @@ module Capissh
       end
 
       def default_callback
-        Proc.new do |channel, name, sent, total|
-          logger.trace "[#{channel[:host]}] #{name}" if logger && sent == 0
+        Proc.new do |ch, name, sent, total|
+          logger.trace "[#{ch[:host]}] #{name}" if logger && sent == 0
         end
       end
 
@@ -63,17 +63,17 @@ module Capissh
       end
 
       def upload
-        self.channel = session.scp.upload(from, to, options, &callback)
-        channel[:server] = server
-        channel[:host]   = server.host
-        channel
+        @channel = session.scp.upload(from, to, options, &callback)
+        @channel[:server] = server
+        @channel[:host]   = server.host
+        @channel
       end
 
       def download
-        self.channel = session.scp.download(from, to, options, &callback)
-        channel[:server] = server
-        channel[:host]   = server.host
-        channel
+        @channel = session.scp.download(from, to, options, &callback)
+        @channel[:server] = server
+        @channel[:host]   = server.host
+        @channel
       end
 
       def sanitized_from

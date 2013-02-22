@@ -173,10 +173,10 @@ module Capissh
     #
     # The additional options below will also be used as follows:
     #
-    # * +on_no_matching_servers+: (optional), set to :continue to return
+    # * +continue_on_no_matching_servers+: (optional), set to :continue to return
     #   instead of raising when no servers are found
     # * +max_hosts+: (optional), integer to batch commands in chunks of hosts
-    # * +continue_on_error+: (optionsal), continue on connection errors
+    # * +continue_on_error+: (optional), continue on connection errors
     #
     def execute_on_servers(servers, options={}, &block)
       raise ArgumentError, "expected a block" unless block_given?

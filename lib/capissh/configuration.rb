@@ -31,10 +31,12 @@ module Capissh
     def set(key, value)
       @options[key.to_sym] = value
     end
+    alias []= set
 
     def fetch(key, *args, &block)
       @options.fetch(key.to_sym, *args, &block)
     end
+    alias [] fetch
 
     def dry_run
       fetch :dry_run, false

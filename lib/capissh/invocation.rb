@@ -212,7 +212,7 @@ module Capissh
           if prompt_host.nil? || prompt_host == ch[:server]
             prompt_host = ch[:server]
             logger.important out, "#{stream} :: #{ch[:server]}"
-            reset! :password
+            configuration.reset! :password
           end
         end
 
