@@ -36,10 +36,6 @@ module Capissh
       @options.fetch(key.to_sym, *args, &block)
     end
 
-    def debug
-      fetch :debug, false
-    end
-
     def dry_run
       fetch :dry_run, false
     end

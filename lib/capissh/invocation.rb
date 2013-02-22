@@ -136,7 +136,7 @@ module Capissh
         raise ArgumentError, "attempt to execute without specifying a command"
       end
 
-      return if configuration.dry_run || (configuration.debug && continue_execution(tree) == false)
+      return if configuration.dry_run
 
       options = add_default_command_options(options)
 
@@ -252,26 +252,6 @@ module Capissh
     # Returns the prompt text to use with sudo
     def sudo_prompt
       configuration.fetch(:sudo_prompt, "sudo password: ")
-    end
-
-    def continue_execution(tree)
-      if tree.branches.length == 1
-        continue_execution_for_branch(tree.branches.first)
-      else
-        tree.each { |branch| branch.skip! unless continue_execution_for_branch(branch) }
-        tree.any? { |branch| !branch.skip? }
-      end
-    end
-
-    def continue_execution_for_branch(branch)
-      case Capissh::CLI.debug_prompt(branch)
-      when "y"
-        true
-      when "n"
-        false
-      when "a"
-        exit(-1)
-      end
     end
 
   end
