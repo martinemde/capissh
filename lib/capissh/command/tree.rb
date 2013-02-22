@@ -122,7 +122,7 @@ module Capissh
         branches_for(server).map do |branch|
           command = branch.command
           if configuration
-            command = configuration.command_mutator.call(command, server)
+            command = configuration.placeholder_callback.call(command, server)
           end
           [command, branch.callback]
         end

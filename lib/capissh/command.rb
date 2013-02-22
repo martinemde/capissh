@@ -49,11 +49,6 @@ module Capissh
     # * +pty+: (optional), execute the command in a pty
     def initialize(tree, sessions, options={})
       @tree = tree
-
-      if tree.respond_to?(:configuration) && tree.configuration
-        @command_mutator = tree.configuration.command_mutator
-      end
-
       @options = options
       @sessions = sessions
       @channels = open_channels
@@ -165,22 +160,18 @@ module Capissh
         end
       end
 
-      def compose_command(cmd, server)
-        if @command_mutator # FIXME: It's confusing to require the return value with it named like this.
-          cmd = @command_mutator.call(cmd, server)
-        end
-
-        cmd = cmd.strip.gsub(/\r?\n/, "\\\n")
+      def compose_command(command, server)
+        command = command.strip.gsub(/\r?\n/, "\\\n")
 
         if options[:shell] == false
           shell = nil
         else
           shell = "#{options[:shell] || "sh"} -c"
-          cmd = cmd.gsub(/'/) { |m| "'\\''" }
-          cmd = "'#{cmd}'"
+          command = command.gsub(/'/) { |m| "'\\''" }
+          command = "'#{command}'"
         end
 
-        [environment, shell, cmd].compact.join(" ")
+        [environment, shell, command].compact.join(" ")
       end
 
       # prepare a space-separated sequence of variables assignments
@@ -192,7 +183,8 @@ module Capissh
       # "env TEST=(\ \"quoted\"\ ) PATH=/opt/ruby/bin:$PATH"
       def environment
         return if options[:env].nil? || options[:env].empty?
-        @environment ||= if String === options[:env]
+        @environment ||=
+          if String === options[:env]
             "env #{options[:env]}"
           else
             options[:env].inject("env") do |string, (name, value)|
