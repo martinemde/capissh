@@ -13,7 +13,7 @@ Gem::Specification.new do |s|
   s.summary = "Extraction of Capistrano's parallel SSH command execution"
   s.description = s.summary
 
-  s.files = Dir.glob("{bin,lib}/**/*") + %w(LICENSE README.rdoc)
+  s.files = Dir.glob("{bin,lib}/**/*") + %w(LICENSE README.md)
   s.require_path = 'lib'
 
   s.test_files = Dir.glob("spec/**/*")
