@@ -1,6 +1,6 @@
 require 'benchmark'
 require 'capissh/errors'
-require 'capissh/command/tree'
+require 'capissh/command_tree'
 
 module Capissh
 
@@ -18,9 +18,9 @@ module Capissh
       alias process process_tree
 
       # Convenience method to process a command given as a string
-      # rather than a Command::Tree.
+      # rather than a CommandTree.
       def process_string(string, sessions, options={}, &block)
-        tree = Tree.twig(nil, string, &block)
+        tree = CommandTree.twig(nil, string, &block)
         process_tree(tree, sessions, options)
       end
     end

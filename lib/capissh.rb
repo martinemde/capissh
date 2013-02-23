@@ -5,7 +5,7 @@
 # * Server definition - Some object that can be executed on to connect to a server
 # * Server collection - A collection of servers on which to execute
 # * Command - What to run on the servers
-# * Command Tree - What to run in parallel
+# * CommandTree - What to run in parallel
 #
 # SSH Related stuff
 # * Connection - A connection to a server definition that is held for reuse

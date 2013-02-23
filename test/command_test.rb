@@ -4,7 +4,7 @@ require 'capissh/configuration'
 
 class CommandTest < MiniTest::Unit::TestCase
   def tree(cmd, options={}, &block)
-    Capissh::Command::Tree.twig(nil, cmd, options, &block)
+    Capissh::CommandTree.twig(nil, cmd, options, &block)
   end
 
   def test_command_should_open_channels_on_all_sessions
