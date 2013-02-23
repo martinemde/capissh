@@ -196,7 +196,7 @@ class TransferTest < MiniTest::Unit::TestCase
     end
 
     def session(host, mode=nil)
-      session = stub('session', :xserver => stub('server', :host => host))
+      session = stub('session', :xserver => server(host))
       case mode
       when :sftp
         sftp = stub('sftp')
