@@ -3,8 +3,8 @@ require 'capissh/command'
 require 'capissh/configuration'
 
 class CommandTest < MiniTest::Unit::TestCase
-  def tree(cmd, &block)
-    Capissh::Command::Tree.twig(nil, cmd, &block)
+  def tree(cmd, options={}, &block)
+    Capissh::Command::Tree.twig(nil, cmd, options, &block)
   end
 
   def test_command_should_open_channels_on_all_sessions
@@ -33,35 +33,35 @@ class CommandTest < MiniTest::Unit::TestCase
       ch.expects(:request_pty).never
       ch.expects(:exec).with(%(env FOO=bar sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), :env => { "FOO" => "bar" }).call(sessions)
+    Capissh::Command.new(tree("ls", :env => { "FOO" => "bar" })).call(sessions)
   end
 
   def test_env_with_symbolic_key_should_be_accepted_as_a_string
     sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env FOO=bar sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), :env => { :FOO => "bar" }).call(sessions)
+    Capissh::Command.new(tree("ls", :env => { :FOO => "bar" })).call(sessions)
   end
 
   def test_env_as_string_should_be_substituted_in_directly
     sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env HOWDY=there sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), :env => "HOWDY=there").call(sessions)
+    Capissh::Command.new(tree("ls", :env => "HOWDY=there")).call(sessions)
   end
 
   def test_env_with_symbolic_value_should_be_accepted_as_string
     sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env FOO=bar sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), :env => { "FOO" => :bar }).call(sessions)
+    Capissh::Command.new(tree("ls", :env => { "FOO" => :bar })).call(sessions)
   end
 
   def test_env_value_should_be_escaped
     sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env FOO=(\\ \\\"bar\\\"\\ ) sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), :env => { "FOO" => '( "bar" )' }).call(sessions)
+    Capissh::Command.new(tree("ls", :env => { "FOO" => '( "bar" )' })).call(sessions)
   end
 
   def test_env_with_multiple_keys_should_chain_the_entries_together
@@ -74,7 +74,7 @@ class CommandTest < MiniTest::Unit::TestCase
         command =~ / sh -c 'ls'$/
       end
     end
-    Capissh::Command.new(tree("ls"), :env => { :a => :b, :c => :d, :e => :f }).call(sessions)
+    Capissh::Command.new(tree("ls", :env => { :a => :b, :c => :d, :e => :f })).call(sessions)
   end
 
   def test_open_channel_should_set_server_key_on_channel
@@ -102,14 +102,14 @@ class CommandTest < MiniTest::Unit::TestCase
     sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(/bin/bash -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), :shell => "/bin/bash").call(sessions)
+    Capissh::Command.new(tree("ls", :shell => "/bin/bash")).call(sessions)
   end
 
   def test_successful_channel_with_shell_false_should_send_command_without_shell
     sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(echo `hostname`))
     end
-    Capissh::Command.new(tree("echo `hostname`"), :shell => false).call(sessions)
+    Capissh::Command.new(tree("echo `hostname`", :shell => false)).call(sessions)
   end
 
   def test_successful_channel_should_send_data_if_data_key_is_present

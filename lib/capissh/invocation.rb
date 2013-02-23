@@ -55,7 +55,7 @@ module Capissh
     # See #run for a description of the valid +options+.
     def parallel(servers, options={})
       raise ArgumentError, "parallel() requires a block" unless block_given?
-      tree = Command::Tree.new(configuration) { |t| yield t }
+      tree = Command::Tree.new(configuration, options) { |t| yield t }
       run_tree(servers, tree, options)
     end
 
@@ -116,7 +116,7 @@ module Capissh
         options = options.merge(:eof => !block_given?)
       end
       block ||= Command.default_io_proc
-      tree = Command::Tree.twig(configuration, cmd, &block)
+      tree = Command::Tree.twig(configuration, cmd, options, &block)
       run_tree(servers, tree, options)
     end
 

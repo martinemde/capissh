@@ -4,6 +4,7 @@ module Capissh
       attr_reader :configuration
       attr_reader :branches
       attr_reader :fallback
+      attr_reader :options
 
       include Enumerable
 
@@ -40,20 +41,14 @@ module Capissh
       end
 
       class ConditionBranch < Branch
-        attr_accessor :configuration
         attr_accessor :condition
 
         class Evaluator
-          attr_reader :configuration, :condition, :server
+          attr_reader :condition, :server
 
-          def initialize(config, condition, server)
-            @configuration = config
+          def initialize(condition, server)
             @condition = condition
             @server = server
-          end
-
-          def in?(role)
-            configuration.roles[role].include?(server)
           end
 
           def result
@@ -63,22 +58,19 @@ module Capissh
           def method_missing(sym, *args, &block)
             if server.respond_to?(sym)
               server.send(sym, *args, &block)
-            elsif configuration.respond_to?(sym)
-              configuration.send(sym, *args, &block)
             else
               super
             end
           end
         end
 
-        def initialize(configuration, condition, command, options, callback)
-          @configuration = configuration
+        def initialize(condition, command, options, callback)
           @condition = condition
           super(command, options, callback)
         end
 
         def match(server)
-          Evaluator.new(configuration, condition, server).result
+          Evaluator.new(condition, server).result
         end
 
         def to_s
@@ -87,18 +79,19 @@ module Capissh
       end
 
       # A tree with only one branch.
-      def self.twig(config, command, &block)
-        new(config) { |t| t.else(command, &block) }
+      def self.twig(config, command, options={}, &block)
+        new(config, options) { |t| t.else(command, &block) }
       end
 
-      def initialize(config)
+      def initialize(config, options={})
         @configuration = config
+        @options = options
         @branches = []
         yield self if block_given?
       end
 
       def when(condition, command, options={}, &block)
-        branches << ConditionBranch.new(configuration, condition, command, options, block)
+        branches << ConditionBranch.new(condition, command, options, block)
       end
 
       def else(command, &block)
@@ -124,6 +117,7 @@ module Capissh
           if configuration
             command = configuration.placeholder_callback.call(command, server)
           end
+          command = compose_command(command, server)
           [command, branch.callback]
         end
       end
@@ -132,6 +126,40 @@ module Capissh
         branches.each { |branch| yield branch }
         yield fallback if fallback
         return self
+      end
+
+      def compose_command(command, server)
+        command = command.strip.gsub(/\r?\n/, "\\\n")
+
+        if options[:shell] == false
+          shell = nil
+        else
+          shell = "#{options[:shell] || "sh"} -c"
+          command = command.gsub(/'/) { |m| "'\\''" }
+          command = "'#{command}'"
+        end
+
+        [environment, shell, command].compact.join(" ")
+      end
+
+      # prepare a space-separated sequence of variables assignments
+      # intended to be prepended to a command, so the shell sets
+      # the environment before running the command.
+      # i.e.: options[:env] = {'PATH' => '/opt/ruby/bin:$PATH',
+      #                        'TEST' => '( "quoted" )'}
+      # environment returns:
+      # "env TEST=(\ \"quoted\"\ ) PATH=/opt/ruby/bin:$PATH"
+      def environment
+        return if options[:env].nil? || options[:env].empty?
+        @environment ||=
+          if String === options[:env]
+            "env #{options[:env]}"
+          else
+            options[:env].inject("env") do |string, (name, value)|
+              value = value.to_s.gsub(/[ "]/) { |m| "\\#{m}" }
+              string << " #{name}=#{value}"
+            end
+          end
       end
     end
   end

@@ -93,21 +93,17 @@ module Capissh
       def open_channels(sessions)
         sessions.map do |session|
           server = session.xserver
-          @tree.base_command_and_callback(server).map do |base_command, io_proc|
+          @tree.base_command_and_callback(server).map do |command, io_proc|
             session.open_channel do |channel|
               channel[:server] = server
               channel[:options] = options
               channel[:logger] = logger
-              channel[:base_command] = base_command
+              channel[:command] = command
               channel[:io_proc] = io_proc
 
               request_pty_if_necessary(channel) do |ch|
                 logger.trace "executing command", ch[:server] if logger
-
-                command_line = compose_command(channel[:base_command], channel[:server])
-                channel[:command] = command_line
-
-                ch.exec(command_line)
+                ch.exec(channel[:command])
                 ch.send_data(options[:data]) if options[:data]
                 ch.eof! if options[:eof]
               end
@@ -150,38 +146,5 @@ module Capissh
         end
       end
 
-      def compose_command(command, server)
-        command = command.strip.gsub(/\r?\n/, "\\\n")
-
-        if options[:shell] == false
-          shell = nil
-        else
-          shell = "#{options[:shell] || "sh"} -c"
-          command = command.gsub(/'/) { |m| "'\\''" }
-          command = "'#{command}'"
-        end
-
-        [environment, shell, command].compact.join(" ")
-      end
-
-      # prepare a space-separated sequence of variables assignments
-      # intended to be prepended to a command, so the shell sets
-      # the environment before running the command.
-      # i.e.: options[:env] = {'PATH' => '/opt/ruby/bin:$PATH',
-      #                        'TEST' => '( "quoted" )'}
-      # environment returns:
-      # "env TEST=(\ \"quoted\"\ ) PATH=/opt/ruby/bin:$PATH"
-      def environment
-        return if options[:env].nil? || options[:env].empty?
-        @environment ||=
-          if String === options[:env]
-            "env #{options[:env]}"
-          else
-            options[:env].inject("env") do |string, (name, value)|
-              value = value.to_s.gsub(/[ "]/) { |m| "\\#{m}" }
-              string << " #{name}=#{value}"
-            end
-          end
-      end
   end
 end
