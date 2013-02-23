@@ -2,6 +2,8 @@ require 'net/scp'
 require 'net/sftp'
 
 require 'capissh/errors'
+require 'capissh/transfer/scp'
+require 'capissh/transfer/sftp'
 
 module Capissh
   class Transfer
@@ -26,9 +28,16 @@ module Capissh
       @to        = to
       @options   = options
       @callback  = block
-
       @transport = options.fetch(:via, :sftp)
       @logger    = options.delete(:logger)
+
+      unless [:up,:down].include?(@direction)
+        raise ArgumentError, "unsupported transfer direction: #{@direction.inspect}"
+      end
+
+      unless [:sftp,:scp].include?(@transport)
+        raise ArgumentError, "unsupported transport type: #{@transport.inspect}"
+      end
     end
 
     def intent
@@ -57,10 +66,10 @@ module Capissh
         end
       end
 
-      failed = transfers.select { |txfr| txfr[:failed] }
+      failed = transfers.select { |transfer| transfer.failed? }
       if failed.any?
-        hosts = failed.map { |txfr| txfr[:server] }
-        errors = failed.map { |txfr| "#{txfr[:error]} (#{txfr[:error].message})" }.uniq.join(", ")
+        hosts = failed.map { |transfer| transfer.server }
+        errors = failed.map { |transfer| "#{transfer.error} (#{transfer.error.message})" }.uniq.join(", ")
         error = TransferError.new("#{operation} via #{transport} failed on #{hosts.join(',')}: #{errors}")
         error.hosts = hosts
 
@@ -94,97 +103,24 @@ module Capissh
 
     private
 
+      def transfer_class
+        {
+          :sftp => Transfer::SFTP,
+          :scp  => Transfer::SCP,
+        }
+      end
+
       def prepare_transfer(session)
         session_from = normalize(from, session)
         session_to   = normalize(to, session)
-
-        case transport
-        when :sftp
-          prepare_sftp_transfer(session_from, session_to, session)
-        when :scp
-          prepare_scp_transfer(session_from, session_to, session)
-        else
-          raise ArgumentError, "unsupported transport type: #{transport.inspect}"
-        end
-      end
-
-      def prepare_scp_transfer(from, to, session)
-        real_callback = callback || Proc.new do |channel, name, sent, total|
-          logger.trace "[#{channel[:host]}] #{name}" if logger && sent == 0
-        end
-
-        channel = case direction
-          when :up
-            session.scp.upload(from, to, options, &real_callback)
-          when :down
-            session.scp.download(from, to, options, &real_callback)
-          else
-            raise ArgumentError, "unsupported transfer direction: #{direction.inspect}"
-          end
-
-        channel[:server] = session.xserver
-        channel[:host]   = session.xserver.host
-
-        return channel
-      end
-
-      class SFTPTransferWrapper
-        attr_reader :operation
-
-        def initialize(session, &callback)
-          session.sftp(false).connect do |sftp|
-            @operation = callback.call(sftp)
-          end
-        end
-
-        def active?
-          @operation.nil? || @operation.active?
-        end
-
-        def [](key)
-          @operation[key]
-        end
-
-        def []=(key, value)
-          @operation[key] = value
-        end
-
-        def abort!
-          @operation.abort!
-        end
-      end
-
-      def prepare_sftp_transfer(from, to, session)
-        SFTPTransferWrapper.new(session) do |sftp|
-          real_callback = Proc.new do |event, op, *args|
-            if callback
-              callback.call(event, op, *args)
-            elsif event == :open
-              logger.trace "[#{op[:host]}] #{args[0].remote}"
-            elsif event == :finish
-              logger.trace "[#{op[:host]}] done"
-            end
-          end
-
-          opts = options.dup
-          opts[:properties] ||= {}
-          opts[:properties][:server] = session.xserver
-          opts[:properties][:host]   = session.xserver.host
-
-          case direction
-          when :up
-            sftp.upload(from, to, opts, &real_callback)
-          when :down
-            sftp.download(from, to, opts, &real_callback)
-          else
-            raise ArgumentError, "unsupported transfer direction: #{direction.inspect}"
-          end
-        end
+        transfer = transfer_class[transport].new(direction, session_from, session_to, session, options, &callback)
+        transfer.prepare
+        transfer
       end
 
       def normalize(argument, session)
         if argument.is_a?(String)
-          argument.gsub(/\$CAPISSH:HOST\$/, session.xserver.host)
+          Configuration.default_placeholder_callback.call(argument, session.xserver)
         elsif argument.respond_to?(:read)
           pos = argument.pos
           clone = StringIO.new(argument.read)
@@ -198,13 +134,10 @@ module Capissh
       def handle_error(transfer, error)
         raise error if error.message.include?('expected a file to upload')
 
-        transfer[:error] = error
-        transfer[:failed] = true
+        transfer.error = error
+        transfer.failed!
 
-        case transport
-        when :sftp then transfer.abort!
-        when :scp  then transfer.close
-        end
+        transfer.close
       end
   end
 end

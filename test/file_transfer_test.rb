@@ -4,7 +4,7 @@ require 'capissh/file_transfers'
 class FileTransfersTest < MiniTest::Unit::TestCase
   def setup
     @logger = stub_everything
-    @configuration = stub("Configuration", :dry_run => false)
+    @configuration = stub("Configuration")
     @file_transfer = Capissh::FileTransfers.new(@configuration, @logger)
     @servers = [server('cap1'), server('cap2')]
   end

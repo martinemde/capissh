@@ -24,7 +24,6 @@ class TransferTest < MiniTest::Unit::TestCase
     sessions.each do |s|
       txfr = mock('operation')
       txfr.expects(:active?).times(4).returns(returns.shift)
-      txfr.expects(:[]).with(:failed).returns(nil)
       s.xsftp.expects(:upload).returns(txfr)
     end
     transfer = Capissh::Transfer.new(:up, "from", "to", :via => :sftp)
@@ -37,7 +36,6 @@ class TransferTest < MiniTest::Unit::TestCase
     sessions.each do |s|
       txfr = mock('operation')
       txfr.expects(:active?).times(1).returns(false)
-      txfr.expects(:[]).with(:failed).returns(nil)
       s.xsftp.expects(:upload).returns(txfr)
     end
     transfer = Capissh::Transfer.new(:up, "from", "to", :via => :sftp)
@@ -105,7 +103,6 @@ class TransferTest < MiniTest::Unit::TestCase
 
     sessions.each do |session|
       txfr = mock('operation')
-      txfr.expects(:[]).with(:failed).returns(nil)
       session.xsftp.expects(:upload).returns(txfr).with do |from, to, opts|
         from != io && from.is_a?(StringIO) && from.string == io.string &&
         to == "/to/here-#{session.xserver.host}" &&
@@ -127,7 +124,6 @@ class TransferTest < MiniTest::Unit::TestCase
       channel = mock('channel')
       channel.expects(:[]=).with(:server, session.xserver)
       channel.expects(:[]=).with(:host, session.xserver.host)
-      channel.expects(:[]).with(:failed).returns(nil)
       session.scp.expects(:upload).returns(channel).with do |from, to, opts|
         from != io && from.is_a?(StringIO) && from.string == io.string &&
         to == "/to/here-#{session.xserver.host}"
