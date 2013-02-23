@@ -163,7 +163,7 @@ class ConnectionManagerTest < MiniTest::Unit::TestCase
       Capissh::SSH.expects(:connect).with(server,anything).returns(server)
     end
     @connection_manager.execute_on_servers(list) do |result|
-      assert_equal list, result
+      assert_equal Capissh::Sessions.new(list), result
     end
   end
 

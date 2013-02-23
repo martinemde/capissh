@@ -4,6 +4,7 @@ require 'capissh/ssh'
 require 'capissh/errors'
 require 'capissh/server_definition'
 require 'capissh/logger'
+require 'capissh/sessions'
 
 module Capissh
   class ConnectionManager
@@ -152,8 +153,6 @@ module Capissh
         error.hosts = failed_servers.map { |h| h[:server] }.each {|server| failed!(server) }
         raise error
       end
-
-      servers_array.map {|server| sessions[server] }
     end
 
     # Destroys sessions for each server in the list.
@@ -216,7 +215,7 @@ module Capissh
         end
 
         begin
-          yield servers_slice.map { |server| sessions[server] }
+          yield Sessions.new(servers_slice.map { |server| sessions[server] })
         rescue RemoteError => error
           raise error unless options[:continue_on_error]
           error.hosts.each { |h| failed!(h) }

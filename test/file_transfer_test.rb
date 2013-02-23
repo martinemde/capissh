@@ -5,8 +5,7 @@ class FileTransfersTest < MiniTest::Unit::TestCase
   def setup
     @logger = stub_everything
     @configuration = stub("Configuration", :dry_run => false)
-    @connection_manager = stub("ConnectionManager")
-    @file_transfer = Capissh::FileTransfers.new(@configuration, @connection_manager, :logger => @logger)
+    @file_transfer = Capissh::FileTransfers.new(@configuration, @logger)
     @servers = [server('cap1'), server('cap2')]
   end
 
@@ -46,22 +45,16 @@ class FileTransfersTest < MiniTest::Unit::TestCase
     @file_transfer.upload(@servers, "testl.txt", "testr.txt", :mode => "g+w", :foo => "bar")
   end
 
-  def test_upload_wont_transfer_if_dry_run
-    @configuration.expects(:dry_run).returns(true)
-    @connection_manager.expects(:execute_on_servers).never
-    ::Capissh::Transfer.expects(:process).never
-    @configuration.expects(:run).with(@servers, "chmod 775 testr.txt", {:foo => "bar"}) # this dry_runs also
-    @file_transfer.upload(@servers, "testl.txt", "testr.txt", :mode => 0775, :foo => "bar")
-  end
-
   def test_download_should_delegate_to_transfer
     @file_transfer.expects(:transfer).with(@servers, :down, "testr.txt", "testl.txt", :foo => "bar")
     @file_transfer.download(@servers, "testr.txt", "testl.txt", :foo => "bar")
   end
 
   def test_transfer_should_invoke_transfer_on_matching_servers
-    @connection_manager.expects(:execute_on_servers).with(@servers, :foo => "bar").yields([:a, :b])
-    Capissh::Transfer.expects(:process).with(:up, "testl.txt", "testr.txt", [:a, :b], {:foo => "bar", :logger => @logger})
+    @configuration.expects(:execute_on_servers).with(@servers, :foo => "bar").yields([:a, :b])
+    transfer = mock('transfer', :intent => "sftp upload testl.txt -> testr.txt")
+    transfer.expects(:call).with([:a, :b])
+    Capissh::Transfer.expects(:new).with(:up, "testl.txt", "testr.txt", {:foo => "bar", :logger => @logger}).returns(transfer)
     @file_transfer.transfer(@servers, :up, "testl.txt", "testr.txt", :foo => "bar")
   end
 

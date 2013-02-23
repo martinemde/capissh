@@ -1,6 +1,5 @@
 require 'benchmark'
 require 'capissh/errors'
-require 'capissh/processable'
 require 'capissh/command/tree'
 
 module Capissh
@@ -8,15 +7,13 @@ module Capissh
   # This class encapsulates a single command to be executed on a set of remote
   # machines, in parallel.
   class Command
-    include Processable
-
     attr_reader :tree, :sessions, :options
 
     class << self
       attr_accessor :default_io_proc
 
       def process_tree(tree, sessions, options={})
-        new(tree, sessions, options).process!
+        new(tree, options).call(sessions)
       end
       alias process process_tree
 
@@ -47,51 +44,44 @@ module Capissh
     # * +env+: (optional), a string or hash to be interpreted as environment
     #   variables that should be defined for this command invocation.
     # * +pty+: (optional), execute the command in a pty
-    def initialize(tree, sessions, options={})
+    def initialize(tree, options={})
       @tree = tree
       @options = options
-      @sessions = sessions
-      @channels = open_channels
     end
 
     # Processes the command in parallel on all specified hosts. If the command
     # fails (non-zero return code) on any of the hosts, this will raise a
     # Capissh::CommandError.
-    def process!
+    def call(sessions)
+      channels = open_channels(sessions)
+
       elapsed = Benchmark.realtime do
         loop do
-          break unless process_iteration { active? }
+          active = sessions.process_iteration do
+            channels.any? { |ch| !ch[:closed] }
+          end
+          break unless active
         end
       end
 
       logger.trace "command finished in #{(elapsed * 1000).round}ms" if logger
 
-      failed = @channels.select { |ch| ch[:status] != 0 }
+      failed = channels.select { |ch| ch[:status] != 0 }
       if failed.any?
         commands = failed.inject({}) do |map, ch|
           map[ch[:command]] ||= []
           map[ch[:command]] << ch[:server]
           map
         end
-        message = commands.map { |command, list| "#{command.inspect} on #{list.join(',')}" }.join("; ")
-        error = CommandError.new("failed: #{message}")
+        message = commands.map do |command, list|
+          "#{command.inspect} on #{list.join(',')}"
+        end
+        error = CommandError.new("failed: #{message.join("; ")}")
         error.hosts = commands.values.flatten
         raise error
       end
 
       self
-    end
-
-    def active?
-      @channels.any? { |ch| !ch[:closed] }
-    end
-
-    # Force the command to stop processing, by closing all open channels
-    # associated with this command.
-    def stop!
-      @channels.each do |ch|
-        ch.close unless ch[:closed]
-      end
     end
 
     private
@@ -100,7 +90,7 @@ module Capissh
         options[:logger]
       end
 
-      def open_channels
+      def open_channels(sessions)
         sessions.map do |session|
           server = session.xserver
           @tree.base_command_and_callback(server).map do |base_command, io_proc|

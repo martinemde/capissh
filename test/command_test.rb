@@ -8,65 +8,64 @@ class CommandTest < MiniTest::Unit::TestCase
   end
 
   def test_command_should_open_channels_on_all_sessions
-    s1, s2, s3 = mock_session, mock_session, mock_session
-    assert_equal "ls", Capissh::Command.new(tree("ls"), [s1, s2, s3]).tree.fallback.command
+    assert_equal "ls", Capissh::Command.new(tree("ls")).tree.fallback.command
   end
 
   def test_command_with_newlines_should_be_properly_escaped
-    cmd = Capissh::Command.new(tree("ls\necho"), [mock_session])
+    cmd = Capissh::Command.new(tree("ls\necho"))
     assert_equal "ls\\\necho", cmd.tree.fallback.command
   end
 
   def test_command_with_windows_newlines_should_be_properly_escaped
-    cmd = Capissh::Command.new(tree("ls\r\necho"), [mock_session])
+    cmd = Capissh::Command.new(tree("ls\r\necho"))
     assert_equal "ls\\\necho", cmd.tree.fallback.command
   end
 
   def test_command_with_pty_should_request_pty_and_register_success_callback
-    session = setup_for_extracting_channel_action(:request_pty, true) do |ch|
+    sessions = setup_for_extracting_channel_action(:request_pty, true) do |ch|
       ch.expects(:exec).with(%(sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :pty => true)
+    Capissh::Command.new(tree("ls"), :pty => true).call(sessions)
   end
 
   def test_command_with_env_key_should_have_environment_constructed_and_prepended
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:request_pty).never
       ch.expects(:exec).with(%(env FOO=bar sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :env => { "FOO" => "bar" })
+    Capissh::Command.new(tree("ls"), :env => { "FOO" => "bar" }).call(sessions)
   end
 
   def test_env_with_symbolic_key_should_be_accepted_as_a_string
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env FOO=bar sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :env => { :FOO => "bar" })
+    Capissh::Command.new(tree("ls"), :env => { :FOO => "bar" }).call(sessions)
   end
 
   def test_env_as_string_should_be_substituted_in_directly
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env HOWDY=there sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :env => "HOWDY=there")
+    Capissh::Command.new(tree("ls"), :env => "HOWDY=there").call(sessions)
   end
 
   def test_env_with_symbolic_value_should_be_accepted_as_string
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env FOO=bar sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :env => { "FOO" => :bar })
+    Capissh::Command.new(tree("ls"), :env => { "FOO" => :bar }).call(sessions)
   end
 
   def test_env_value_should_be_escaped
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(env FOO=(\\ \\\"bar\\\"\\ ) sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :env => { "FOO" => '( "bar" )' })
+    Capissh::Command.new(tree("ls"), :env => { "FOO" => '( "bar" )' }).call(sessions)
   end
 
   def test_env_with_multiple_keys_should_chain_the_entries_together
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with do |command|
         command =~ /^env / &&
         command =~ /\ba=b\b/ &&
@@ -75,131 +74,127 @@ class CommandTest < MiniTest::Unit::TestCase
         command =~ / sh -c 'ls'$/
       end
     end
-    Capissh::Command.new(tree("ls"), [session], :env => { :a => :b, :c => :d, :e => :f })
+    Capissh::Command.new(tree("ls"), :env => { :a => :b, :c => :d, :e => :f }).call(sessions)
   end
 
   def test_open_channel_should_set_server_key_on_channel
     channel = nil
-    session = setup_for_extracting_channel_action { |ch| channel = ch }
-    Capissh::Command.new(tree("ls"), [session])
+    sessions = setup_for_extracting_channel_action { |ch| channel = ch }
+    Capissh::Command.new(tree("ls")).call(sessions)
     assert_equal "capissh", channel[:server].host
   end
 
   def test_open_channel_should_set_options_key_on_channel
     channel = nil
-    session = setup_for_extracting_channel_action { |ch| channel = ch }
-    Capissh::Command.new(tree("ls"), [session], :data => "here we go")
+    sessions = setup_for_extracting_channel_action { |ch| channel = ch }
+    Capissh::Command.new(tree("ls"), :data => "here we go").call(sessions)
     assert_equal({ :data => 'here we go' }, channel[:options])
   end
 
   def test_successful_channel_should_send_command
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(sh -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session])
+    Capissh::Command.new(tree("ls")).call(sessions)
   end
 
   def test_successful_channel_with_shell_option_should_send_command_via_specified_shell
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(/bin/bash -c 'ls'))
     end
-    Capissh::Command.new(tree("ls"), [session], :shell => "/bin/bash")
+    Capissh::Command.new(tree("ls"), :shell => "/bin/bash").call(sessions)
   end
 
   def test_successful_channel_with_shell_false_should_send_command_without_shell
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(echo `hostname`))
     end
-    Capissh::Command.new(tree("echo `hostname`"), [session], :shell => false)
+    Capissh::Command.new(tree("echo `hostname`"), :shell => false).call(sessions)
   end
 
   def test_successful_channel_should_send_data_if_data_key_is_present
-    session = setup_for_extracting_channel_action do |ch|
+    sessions = setup_for_extracting_channel_action do |ch|
       ch.expects(:exec).with(%(sh -c 'ls'))
       ch.expects(:send_data).with("here we go")
     end
-    Capissh::Command.new(tree("ls"), [session], :data => "here we go")
+    Capissh::Command.new(tree("ls"), :data => "here we go").call(sessions)
   end
 
   def test_unsuccessful_pty_request_should_close_channel
-    session = setup_for_extracting_channel_action(:request_pty, false) do |ch|
+    sessions = setup_for_extracting_channel_action(:request_pty, false) do |ch|
       ch.expects(:close)
     end
-    Capissh::Command.new(tree("ls"), [session], :pty => true)
+    Capissh::Command.new(tree("ls"), :pty => true).call(sessions)
   end
 
   def test_on_data_should_invoke_callback_as_stdout
-    session = setup_for_extracting_channel_action(:on_data, "hello")
+    sessions = setup_for_extracting_channel_action(:on_data, "hello")
     called = false
     twig = tree("ls") do |ch, stream, data|
       called = true
       assert_equal :out, stream
       assert_equal "hello", data
     end
-    Capissh::Command.new(twig, [session])
+    Capissh::Command.new(twig).call(sessions)
     assert called, "expected to yield output to io block"
   end
 
   def test_on_extended_data_should_invoke_callback_as_stderr
-    session = setup_for_extracting_channel_action(:on_extended_data, 2, "hello")
+    sessions = setup_for_extracting_channel_action(:on_extended_data, 2, "hello")
     called = false
     twig = tree("ls") do |ch, stream, data|
       called = true
       assert_equal :err, stream
       assert_equal "hello", data
     end
-    Capissh::Command.new(twig, [session])
+    Capissh::Command.new(twig).call(sessions)
     assert called, "expected to yield output to io block"
   end
 
   def test_on_request_should_record_exit_status
     data = mock(:read_long => 5)
     channel = nil
-    session = setup_for_extracting_channel_action([:on_request, "exit-status"], data) { |ch| channel = ch }
-    Capissh::Command.new(tree("ls"), [session])
+    sessions = setup_for_extracting_channel_action([:on_request, "exit-status"], data) { |ch| channel = ch }
+    assert_raises(Capissh::CommandError, %|failed: "sh -c 'ls'" on capissh|) { Capissh::Command.new(tree("ls")).call(sessions) }
     assert_equal 5, channel[:status]
   end
 
   def test_on_close_should_set_channel_closed
     channel = nil
-    session = setup_for_extracting_channel_action(:on_close) { |ch| channel = ch }
-    Capissh::Command.new(tree("ls"), [session])
+    sessions = setup_for_extracting_channel_action(:on_close) { |ch| channel = ch }
+    Capissh::Command.new(tree("ls")).call(sessions)
     assert channel[:closed]
   end
 
-  def test_stop_should_close_all_open_channels
-    sessions = [mock_session(new_channel(false)),
-                mock_session(new_channel(true)),
-                mock_session(new_channel(false))]
-
-    cmd = Capissh::Command.new(tree("ls"), sessions)
-    cmd.stop!
-  end
-
   def test_process_should_return_cleanly_if_all_channels_have_zero_exit_status
-    sessions = [mock_session(new_channel(true, 0)),
-                mock_session(new_channel(true, 0)),
-                mock_session(new_channel(true, 0))]
-    cmd = Capissh::Command.new(tree("ls"), sessions)
-    cmd.process!
+    sessions = MockSessions.new [
+      mock_session(new_channel(true, 0)),
+      mock_session(new_channel(true, 0)),
+      mock_session(new_channel(true, 0))
+    ]
+    Capissh::Command.new(tree("ls")).call(sessions)
   end
 
   def test_process_should_raise_error_if_any_channel_has_non_zero_exit_status
-    sessions = [mock_session(new_channel(true, 0)),
-                mock_session(new_channel(true, 0)),
-                mock_session(new_channel(true, 1))]
-    cmd = Capissh::Command.new(tree("ls"), sessions)
-    assert_raises(Capissh::CommandError) { cmd.process! }
+    sessions = MockSessions.new [
+      mock_session(new_channel(true, 0)),
+      mock_session(new_channel(true, 0)),
+      mock_session(new_channel(true, 1))
+    ]
+    cmd = Capissh::Command.new(tree("ls"))
+    assert_raises(Capissh::CommandError) { cmd.call(sessions) }
   end
 
   def test_command_error_should_include_accessor_with_host_array
-    sessions = [mock_session(new_channel(true, 0)),
-                mock_session(new_channel(true, 0)),
-                mock_session(new_channel(true, 1))]
-    cmd = Capissh::Command.new(tree("ls"), sessions)
+    sessions = MockSessions.new [
+      mock_session(new_channel(true, 0)),
+      mock_session(new_channel(true, 0)),
+      mock_session(new_channel(true, 1))
+    ]
+    cmd = Capissh::Command.new(tree("ls"))
 
     begin
-      cmd.process!
+      cmd.call(sessions)
       flunk "expected an exception to be raised"
     rescue Capissh::CommandError => e
       assert e.respond_to?(:hosts)
@@ -217,31 +212,34 @@ class CommandTest < MiniTest::Unit::TestCase
       ch
     end
 
-    sessions = [mock_session(new_channel[5]),
-                mock_session(new_channel[10]),
-                mock_session(new_channel[7])]
-    cmd = Capissh::Command.new(tree("ls"), sessions)
-    cmd.process!
+    sessions = MockSessions.new [
+      mock_session(new_channel[5]),
+      mock_session(new_channel[10]),
+      mock_session(new_channel[7])
+    ]
+    Capissh::Command.new(tree("ls")).call(sessions)
   end
 
-  def test_process_should_instantiate_command_and_process!
-    cmd = mock("command", :process! => nil)
+  def test_process_should_instantiate_command_and_call
+    cmd = mock("command")
+    cmd.expects(:call).with(%w(a b c)).returns(nil)
     twig = tree("ls -l")
-    Capissh::Command.expects(:new).with(twig, %w(a b c), {:foo => "bar"}).returns(cmd)
+    Capissh::Command.expects(:new).with(twig, {:foo => "bar"}).returns(cmd)
     Capissh::Command.process(twig, %w(a b c), :foo => "bar")
   end
 
   def test_input_stream_closed_when_eof_option_is_true
     channel = nil
-    session = setup_for_extracting_channel_action { |ch| channel = ch }
+    sessions = setup_for_extracting_channel_action { |ch| channel = ch }
     channel.expects(:eof!)
-    Capissh::Command.new(tree("cat"), [session], :data => "here we go", :eof => true)
+    Capissh::Command.new(tree("cat"), :data => "here we go", :eof => true).call(sessions)
     assert_equal({ :data => 'here we go', :eof => true }, channel[:options])
   end
 
   private
 
     def mock_session(channel=nil)
+      channel ||= new_channel(true, 0)
       stub('session',
            :open_channel => channel,
            :preprocess   => true,
@@ -263,12 +261,18 @@ class CommandTest < MiniTest::Unit::TestCase
       ch
     end
 
+    class MockSessions < Array
+      def process_iteration
+        yield
+      end
+    end
+
     def setup_for_extracting_channel_action(action=nil, *args)
       s = server("capissh")
       session = mock("session", :xserver => s)
 
-      channel = {}
-      session.expects(:open_channel).yields(channel)
+      channel = {:failed => false, :closed => true, :status => 0}
+      session.expects(:open_channel).yields(channel).returns(channel)
 
       channel.stubs(:on_data)
       channel.stubs(:on_extended_data)
@@ -284,6 +288,8 @@ class CommandTest < MiniTest::Unit::TestCase
 
       yield channel if block_given?
 
-      session
+      sessions = [session]
+      sessions.stubs(:process_iteration).yields.returns(false)
+      sessions
     end
 end

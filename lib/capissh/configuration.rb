@@ -44,17 +44,23 @@ module Capissh
       fetch :placeholder_callback, self.class.default_placeholder_callback
     end
 
+    def execute_on_servers(servers, options, &block)
+      unless dry_run
+        connection_manager.execute_on_servers(servers, options, &block)
+      end
+    end
+
     def connection_manager
       @connection_manager ||= ConnectionManager.new(@options.merge(:logger => logger))
     end
 
     def file_transfers
-      @file_transfers ||= FileTransfers.new(self, connection_manager, :logger => logger)
+      @file_transfers ||= FileTransfers.new(self, logger)
     end
     def_delegators :file_transfers, :put, :get, :upload, :download, :transfer
 
     def invocation
-      @invocation ||= Invocation.new(self, connection_manager, :logger => logger)
+      @invocation ||= Invocation.new(self, logger)
     end
     def_delegators :invocation, :parallel, :invoke_command, :run, :sudo, :sudo_command
   end

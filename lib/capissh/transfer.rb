@@ -1,17 +1,15 @@
 require 'net/scp'
 require 'net/sftp'
 
-require 'capissh/processable'
+require 'capissh/errors'
 
 module Capissh
   class Transfer
-    include Processable
 
     def self.process(direction, from, to, sessions, options={}, &block)
-      new(direction, from, to, sessions, options, &block).process!
+      new(direction, from, to, options, &block).call(sessions)
     end
 
-    attr_reader :sessions
     attr_reader :options
     attr_reader :callback
 
@@ -21,31 +19,38 @@ module Capissh
     attr_reader :to
 
     attr_reader :logger
-    attr_reader :transfers
 
-    def initialize(direction, from, to, sessions, options={}, &block)
+    def initialize(direction, from, to, options={}, &block)
       @direction = direction
       @from      = from
       @to        = to
-      @sessions  = sessions
       @options   = options
       @callback  = block
 
       @transport = options.fetch(:via, :sftp)
       @logger    = options.delete(:logger)
-
-      @session_map = {}
-
-      prepare_transfers
     end
 
-    def process!
+    def intent
+      "#{transport} #{operation} #{from} -> #{to}"
+    end
+
+    def call(sessions)
+      session_map = {}
+      transfers = sessions.map do |session|
+        session_map[session] = prepare_transfer(session)
+      end
+
       loop do
         begin
-          break unless process_iteration { active? }
+          active = sessions.process_iteration do
+            transfers.any? { |transfer| transfer.active? }
+          end
+          break unless active
         rescue Exception => error
           if error.respond_to?(:session)
-            handle_error(error)
+            transfer = session_map[error.session]
+            handle_error(transfer, error)
           else
             raise
           end
@@ -65,10 +70,6 @@ module Capissh
 
       logger.debug "#{transport} #{operation} complete" if logger
       self
-    end
-
-    def active?
-      transfers.any? { |transfer| transfer.active? }
     end
 
     def operation
@@ -93,25 +94,17 @@ module Capissh
 
     private
 
-      def session_map
-        @session_map
-      end
+      def prepare_transfer(session)
+        session_from = normalize(from, session)
+        session_to   = normalize(to, session)
 
-      def prepare_transfers
-        logger.info "#{transport} #{operation} #{from} -> #{to}" if logger
-
-        @transfers = sessions.map do |session|
-          session_from = normalize(from, session)
-          session_to   = normalize(to, session)
-
-          session_map[session] = case transport
-            when :sftp
-              prepare_sftp_transfer(session_from, session_to, session)
-            when :scp
-              prepare_scp_transfer(session_from, session_to, session)
-            else
-              raise ArgumentError, "unsupported transport type: #{transport.inspect}"
-            end
+        case transport
+        when :sftp
+          prepare_sftp_transfer(session_from, session_to, session)
+        when :scp
+          prepare_scp_transfer(session_from, session_to, session)
+        else
+          raise ArgumentError, "unsupported transport type: #{transport.inspect}"
         end
       end
 
@@ -174,9 +167,9 @@ module Capissh
           end
 
           opts = options.dup
-          opts[:properties] = (opts[:properties] || {}).merge(
-            :server  => session.xserver,
-            :host    => session.xserver.host)
+          opts[:properties] ||= {}
+          opts[:properties][:server] = session.xserver
+          opts[:properties][:host]   = session.xserver.host
 
           case direction
           when :up
@@ -202,10 +195,9 @@ module Capissh
         end
       end
 
-      def handle_error(error)
+      def handle_error(transfer, error)
         raise error if error.message.include?('expected a file to upload')
 
-        transfer = session_map[error.session]
         transfer[:error] = error
         transfer[:failed] = true
 

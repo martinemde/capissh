@@ -2,12 +2,11 @@ require 'capissh/transfer'
 
 module Capissh
   class FileTransfers
-    attr_reader :configuration, :connection_manager, :logger
+    attr_reader :configuration, :logger
 
-    def initialize(configuration, connection_manager, options={})
+    def initialize(configuration, logger)
       @configuration = configuration
-      @connection_manager = connection_manager
-      @logger  = options[:logger]
+      @logger = logger
     end
 
     # Store the given data at the given location on all servers targetted
@@ -42,11 +41,10 @@ module Capissh
     end
 
     def transfer(servers, direction, from, to, options={}, &block)
-      if configuration.dry_run
-        return logger.debug "transfering: #{[direction, from, to] * ', '}"
-      end
-      connection_manager.execute_on_servers(servers, options) do |sessions|
-        Transfer.process(direction, from, to, sessions, options.merge(:logger => logger), &block)
+      transfer = Transfer.new(direction, from, to, options.merge(:logger => logger), &block)
+      logger.info transfer.intent
+      configuration.execute_on_servers(servers, options) do |sessions|
+        transfer.call(sessions)
       end
     end
 

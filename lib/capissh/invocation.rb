@@ -2,12 +2,11 @@ require 'capissh/command'
 
 module Capissh
   class Invocation
-    attr_reader :configuration, :logger, :connection_manager
+    attr_reader :configuration, :logger
 
-    def initialize(configuration, connection_manager, options={})
+    def initialize(configuration, logger)
       @configuration = configuration
-      @connection_manager = connection_manager
-      @logger = options[:logger]
+      @logger = logger
     end
 
     # Executes different commands in parallel. This is useful for commands
@@ -136,8 +135,6 @@ module Capissh
         raise ArgumentError, "attempt to execute without specifying a command"
       end
 
-      return if configuration.dry_run
-
       options = add_default_command_options(options)
 
       tree.each do |branch|
@@ -146,8 +143,10 @@ module Capissh
         end
       end
 
-      connection_manager.execute_on_servers(servers, options) do |sessions|
-        Command.process(tree, sessions, options.merge(:logger => logger))
+      command = Command.new(tree, options.merge(:logger => logger))
+
+      configuration.execute_on_servers(servers, options) do |sessions|
+        command.call(sessions)
       end
     end
 
