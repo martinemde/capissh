@@ -7,9 +7,9 @@ An extraction of Capistrano's parallel SSH command execution, capiche?
 
 ## About
 
-Capissh executes commands (and soon transfers) on remote servers in parallel.
+Capissh executes commands and file transfers on remote servers in parallel.
 
-Capissh will maintain open connections with servers it has seen when is is
+Capissh will maintain open connections with servers it has seen when it is
 sensible to do so. When the batch size is not restricted, Capissh will maintain
 all connections, which greatly reduces connection overhead. Sets of commands
 are run in parallel on all servers within the batch.
