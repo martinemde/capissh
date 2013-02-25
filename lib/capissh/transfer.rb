@@ -29,7 +29,7 @@ module Capissh
       @options   = options
       @callback  = block
       @transport = options.fetch(:via, :sftp)
-      @logger    = options.delete(:logger)
+      @logger    = options[:logger]
 
       unless [:up,:down].include?(@direction)
         raise ArgumentError, "unsupported transfer direction: #{@direction.inspect}"
@@ -86,19 +86,11 @@ module Capissh
     end
 
     def sanitized_from
-      if from.responds_to?(:read)
-        "#<#{from.class}>"
-      else
-        from
-      end
+      from.responds_to?(:read) ? "#<#{from.class}>" : from
     end
 
     def sanitized_to
-      if to.responds_to?(:read)
-        "#<#{to.class}>"
-      else
-        to
-      end
+      to.responds_to?(:read) ? "#<#{to.class}>" : to
     end
 
     private

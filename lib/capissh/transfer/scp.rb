@@ -4,7 +4,7 @@ require 'capissh/errors'
 module Capissh
   class Transfer
     class SCP
-      attr_reader :direction, :from, :to, :session, :options, :callback, :logger
+      attr_reader :direction, :from, :to, :session, :options, :callback, :logger, :channel
       attr_accessor :error
 
       def initialize(direction, from, to, session, options={}, &block)
@@ -26,7 +26,7 @@ module Capissh
       end
 
       def active?
-        @channel && @channel.active?
+        channel && channel.active?
       end
 
       def failed!
@@ -38,7 +38,7 @@ module Capissh
       end
 
       def close
-        @channel && @channel.close
+        channel && channel.close
       end
 
       def default_callback
@@ -63,33 +63,25 @@ module Capissh
       end
 
       def upload
-        @channel = session.scp.upload(from, to, options, &callback)
-        @channel[:server] = server
-        @channel[:host]   = server.host
-        @channel
+        self.channel = session.scp.upload(from, to, options, &callback)
+        channel[:server] = server
+        channel[:host]   = server.host
+        channel
       end
 
       def download
-        @channel = session.scp.download(from, to, options, &callback)
-        @channel[:server] = server
-        @channel[:host]   = server.host
-        @channel
+        self.channel = session.scp.download(from, to, options, &callback)
+        channel[:server] = server
+        channel[:host]   = server.host
+        channel
       end
 
       def sanitized_from
-        if from.responds_to?(:read)
-          "#<#{from.class}>"
-        else
-          from
-        end
+        from.responds_to?(:read) ? "#<#{from.class}>" : from
       end
 
       def sanitized_to
-        if to.responds_to?(:read)
-          "#<#{to.class}>"
-        else
-          to
-        end
+        to.responds_to?(:read) ? "#<#{to.class}>" : to
       end
 
     end
