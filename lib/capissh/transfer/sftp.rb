@@ -1,12 +1,10 @@
 require 'net/sftp'
-require 'capissh/errors'
 
 module Capissh
   class Transfer
     class SFTP
 
-      attr_reader :direction, :from, :to, :session, :options, :callback, :logger
-      attr_accessor :error
+      attr_reader :direction, :from, :to, :session, :options, :callback, :logger, :error
 
       def initialize(direction, from, to, session, options={}, &block)
         @direction = direction
@@ -42,14 +40,6 @@ module Capissh
         end
       end
 
-      def intent
-        "sftp #{operation} #{from} -> #{to}"
-      end
-
-      def operation
-        "#{direction}load"
-      end
-
       def prepare
         case direction
         when :up   then upload
@@ -81,12 +71,24 @@ module Capissh
         @transfer.abort!
       end
 
-      def failed!
-        @failed = true
+      def failed(error)
+        @error = error
+        close
       end
 
       def failed?
-        @failed
+        !!error
+      end
+
+      def inspect
+        "#<#{self.class} #{state} #{direction}load #{sanitized_from} -> #{sanitized_to} on #{server}>"
+      end
+
+      def state
+        if    active? then "active"
+        elsif failed? then "failed"
+        else               "pending"
+        end
       end
 
       def sanitized_from

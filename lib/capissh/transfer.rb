@@ -57,9 +57,9 @@ module Capissh
           end
           break unless active
         rescue Exception => error
+          raise error if error.message.include?('expected a file to upload')
           if error.respond_to?(:session)
-            transfer = session_map[error.session]
-            handle_error(transfer, error)
+            session_map[error.session].failed(error)
           else
             raise
           end
@@ -104,7 +104,7 @@ module Capissh
 
       def prepare_transfer(session)
         session_from = normalize(from, session)
-        session_to   = normalize(to, session)
+        session_to   = normalize(to,   session)
         transfer = transfer_class[transport].new(direction, session_from, session_to, session, options, &callback)
         transfer.prepare
         transfer
@@ -121,15 +121,6 @@ module Capissh
         else
           argument
         end
-      end
-
-      def handle_error(transfer, error)
-        raise error if error.message.include?('expected a file to upload')
-
-        transfer.error = error
-        transfer.failed!
-
-        transfer.close
       end
   end
 end
