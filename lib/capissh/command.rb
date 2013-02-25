@@ -53,7 +53,9 @@ module Capissh
     # fails (non-zero return code) on any of the hosts, this will raise a
     # Capissh::CommandError.
     def call(sessions)
-      channels = open_channels(sessions)
+      channels = sessions.map do |session|
+        open_channels(session)
+      end.flatten
 
       elapsed = Benchmark.realtime do
         loop do
@@ -90,42 +92,40 @@ module Capissh
         options[:logger]
       end
 
-      def open_channels(sessions)
-        sessions.map do |session|
-          server = session.xserver
-          @tree.base_command_and_callback(server).map do |command, io_proc|
-            session.open_channel do |channel|
-              channel[:server] = server
-              channel[:options] = options
-              channel[:logger] = logger
-              channel[:command] = command
-              channel[:io_proc] = io_proc
+      def open_channels(session)
+        server = session.xserver
+        @tree.base_command_and_callback(server).map do |command, io_proc|
+          session.open_channel do |channel|
+            channel[:server] = server
+            channel[:options] = options
+            channel[:logger] = logger
+            channel[:command] = command
+            channel[:io_proc] = io_proc
 
-              request_pty_if_necessary(channel) do |ch|
-                logger.trace "executing command", ch[:server] if logger
-                ch.exec(channel[:command])
-                ch.send_data(options[:data]) if options[:data]
-                ch.eof! if options[:eof]
-              end
+            request_pty_if_necessary(channel) do |ch|
+              logger.trace "executing command", ch[:server] if logger
+              ch.exec(channel[:command])
+              ch.send_data(options[:data]) if options[:data]
+              ch.eof! if options[:eof]
+            end
 
-              channel.on_data do |ch, data|
-                ch[:io_proc].call(ch, :out, data)
-              end
+            channel.on_data do |ch, data|
+              ch[:io_proc].call(ch, :out, data)
+            end
 
-              channel.on_extended_data do |ch, type, data|
-                ch[:io_proc].call(ch, :err, data)
-              end
+            channel.on_extended_data do |ch, type, data|
+              ch[:io_proc].call(ch, :err, data)
+            end
 
-              channel.on_request("exit-status") do |ch, data|
-                ch[:status] = data.read_long
-              end
+            channel.on_request("exit-status") do |ch, data|
+              ch[:status] = data.read_long
+            end
 
-              channel.on_close do |ch|
-                ch[:closed] = true
-              end
+            channel.on_close do |ch|
+              ch[:closed] = true
             end
           end
-        end.flatten
+        end
       end
 
       def request_pty_if_necessary(channel)
