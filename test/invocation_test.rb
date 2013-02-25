@@ -15,18 +15,16 @@ class InvocationTest < MiniTest::Unit::TestCase
   end
 
   def test_run_options_should_be_passed_to_execute_on_servers
+    prepare_command('ls', [:a,:b], {:foo => "bar", :eof => true, :logger => @logger})
     @configuration.expects(:execute_on_servers).with(@servers, :foo => "bar", :eof => true).yields([:a,:b])
-    command = mock('command')
-    command.expects(:call).with([:a,:b])
-    Capissh::Command.expects(:new).with(anything, {:foo => "bar", :eof => true, :logger => @logger}).returns(command)
     @invocation.run @servers, "ls", :foo => "bar"
   end
 
   def test_run_will_return_if_dry_run
+    @configuration.expects(:execute_on_servers)
     command = mock('command')
     command.expects(:call).never
-    Capissh::Command.expects(:new).with(anything, {:foo => "bar", :eof => true, :logger => @logger}).returns(command)
-    @configuration.expects(:execute_on_servers)
+    Capissh::Command.expects(:new).returns(command)
     @invocation.run @servers, "ls", :foo => "bar"
   end
 
@@ -169,6 +167,12 @@ class InvocationTest < MiniTest::Unit::TestCase
   end
 
   def test_sudo_behavior_callback_should_defer_to_fallback_for_other_output
+    inspectable_proc = Proc.new do |ch, stream, data|
+      ch.called
+      stream.called
+      data.called
+    end
+
     callback = @invocation.sudo_behavior_callback(inspectable_proc)
 
     a = mock("channel", :called => true)
@@ -190,25 +194,11 @@ class InvocationTest < MiniTest::Unit::TestCase
 
   private
 
-    def inspectable_proc
-      Proc.new do |ch, stream, data|
-        ch.called
-        stream.called
-        data.called
-      end
-    end
-
-    def prepare_command(command, sessions, options)
-      a = mock("channel", :called => true)
-      b = mock("stream", :called => true)
-      c = mock("data", :called => true)
-
+    def prepare_command(cmd, sessions, options)
       command = mock('command')
-      command.expects(:call).with do |sess|
-        sess == sessions
-      end
+      command.expects(:call).with(sessions)
       Capissh::Command.expects(:new).returns(command).with do |tree, opts|
-        tree.fallback.command == command && opts == options
+        tree.fallback.command == cmd && opts == options
       end
     end
 end
