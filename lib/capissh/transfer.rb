@@ -7,6 +7,13 @@ require 'capissh/transfer/sftp'
 
 module Capissh
   class Transfer
+    class << self
+      attr_accessor :transfer_types
+    end
+    self.transfer_types = {
+      :scp  => Transfer::SCP,
+      :sftp => Transfer::SFTP,
+    }
 
     def self.process(direction, from, to, sessions, options={}, &block)
       new(direction, from, to, options, &block).call(sessions)
@@ -28,26 +35,24 @@ module Capissh
       @to        = to
       @options   = options
       @callback  = block
+
       @transport = options.fetch(:via, :sftp)
       @logger    = options[:logger]
+
+      @transfer_class = self.class.transfer_types[@transport]
+      unless @transfer_class
+        raise ArgumentError, "unsupported transport type: #{@transport.inspect}"
+      end
 
       unless [:up,:down].include?(@direction)
         raise ArgumentError, "unsupported transfer direction: #{@direction.inspect}"
       end
-
-      unless [:sftp,:scp].include?(@transport)
-        raise ArgumentError, "unsupported transport type: #{@transport.inspect}"
-      end
-    end
-
-    def intent
-      "#{transport} #{operation} #{from} -> #{to}"
     end
 
     def call(sessions)
       session_map = {}
       transfers = sessions.map do |session|
-        session_map[session] = prepare_transfer(session)
+        session_map[session] = open_transfer(session)
       end
 
       loop do
@@ -59,7 +64,8 @@ module Capissh
         rescue Exception => error
           raise error if error.message.include?('expected a file to upload')
           if error.respond_to?(:session)
-            session_map[error.session].failed(error)
+            transfer = session_map[error.session]
+            transfer.failed(error)
           else
             raise
           end
@@ -68,17 +74,24 @@ module Capissh
 
       failed = transfers.select { |transfer| transfer.failed? }
       if failed.any?
-        hosts = failed.map { |transfer| transfer.server }
-        errors = failed.map { |transfer| "#{transfer.error} (#{transfer.error.message})" }.uniq.join(", ")
-        error = TransferError.new("#{operation} via #{transport} failed on #{hosts.join(',')}: #{errors}")
-        error.hosts = hosts
-
-        logger.important(error.message) if logger
-        raise error
+        handle_failed(failed)
       end
 
       logger.debug "#{transport} #{operation} complete" if logger
       self
+    end
+
+    def handle_failed(failed)
+      hosts = failed.map { |transfer| transfer.server }
+      errors = failed.map { |transfer| "#{transfer.error} (#{transfer.error.message})" }.uniq.join(", ")
+      error = TransferError.new("#{operation} via #{transport} failed on #{hosts.join(',')}: #{errors}")
+      error.hosts = hosts
+      logger.important(error.message) if logger
+      raise error
+    end
+
+    def intent
+      "#{transport} #{operation} #{sanitized_from} -> #{sanitized_to}"
     end
 
     def operation
@@ -95,19 +108,10 @@ module Capissh
 
     private
 
-      def transfer_class
-        {
-          :sftp => Transfer::SFTP,
-          :scp  => Transfer::SCP,
-        }
-      end
-
-      def prepare_transfer(session)
+      def open_transfer(session)
         session_from = normalize(from, session)
         session_to   = normalize(to,   session)
-        transfer = transfer_class[transport].new(direction, session_from, session_to, session, options, &callback)
-        transfer.prepare
-        transfer
+        @transfer_class.open(direction, session_from, session_to, session, options, &callback)
       end
 
       def normalize(argument, session)

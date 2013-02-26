@@ -3,6 +3,9 @@ require 'net/sftp'
 module Capissh
   class Transfer
     class SFTP
+      def self.open(*args)
+        new(*args).open
+      end
 
       attr_reader :direction, :from, :to, :session, :options, :callback, :logger, :error
 
@@ -26,6 +29,27 @@ module Capissh
         end
       end
 
+      def open
+        case direction
+        when :up   then upload
+        when :down then download
+        end
+      end
+
+      def upload
+        session.sftp(false).connect do |sftp|
+          @transfer = sftp.upload(from, to, options, &callback)
+        end
+        self
+      end
+
+      def download
+        session.sftp(false).connect do |sftp|
+          @transfer = sftp.download(from, to, options, &callback)
+        end
+        self
+      end
+
       def server
         session.xserver
       end
@@ -37,29 +61,6 @@ module Capissh
           elsif event == :finish
             logger.trace "[#{op[:host]}] done"
           end
-        end
-      end
-
-      def prepare
-        case direction
-        when :up   then upload
-        when :down then download
-        end
-      end
-
-      def connect(&block)
-        session.sftp(false).connect(&block)
-      end
-
-      def upload
-        connect do |sftp|
-          @transfer = sftp.upload(from, to, options, &callback)
-        end
-      end
-
-      def download
-        connect do |sftp|
-          @transfer = sftp.download(from, to, options, &callback)
         end
       end
 

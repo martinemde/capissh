@@ -3,6 +3,10 @@ require 'net/scp'
 module Capissh
   class Transfer
     class SCP
+      def self.open(*args)
+        new(*args).open
+      end
+
       attr_reader :direction, :from, :to, :session, :options, :callback, :logger, :channel, :error
 
       def initialize(direction, from, to, session, options={}, &block)
@@ -17,6 +21,30 @@ module Capissh
         unless [:up,:down].include?(@direction)
           raise ArgumentError, "unsupported transfer direction: #{@direction.inspect}"
         end
+      end
+
+      def open
+        case direction
+        when :up   then upload
+        when :down then download
+        end
+      end
+
+      def upload
+        @channel = session.scp.upload(from, to, options, &callback)
+        augment_channel
+        self
+      end
+
+      def download
+        @channel = session.scp.download(from, to, options, &callback)
+        augment_channel
+        self
+      end
+
+      def augment_channel
+        channel[:server] = server
+        channel[:host]   = server.host
       end
 
       def server
@@ -44,27 +72,6 @@ module Capissh
         Proc.new do |ch, name, sent, total|
           logger.trace "[#{ch[:host]}] #{name}" if logger && sent == 0
         end
-      end
-
-      def prepare
-        case direction
-        when :up   then upload
-        when :down then download
-        end
-      end
-
-      def upload
-        @channel = session.scp.upload(from, to, options, &callback)
-        @channel[:server] = server
-        @channel[:host]   = server.host
-        @channel
-      end
-
-      def download
-        @channel = session.scp.download(from, to, options, &callback)
-        @channel[:server] = server
-        @channel[:host]   = server.host
-        @channel
       end
 
       def inspect
