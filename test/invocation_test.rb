@@ -6,12 +6,12 @@ class InvocationTest < Minitest::Test
     @logger = stub_everything
     @configuration = Capissh::Configuration.new(:logger => @logger)
     @invocation = Capissh::Invocation.new(@configuration, @logger)
-    @original_io_proc = Capissh::Command.default_io_proc
+    @original_io_callback = Capissh::Command.default_io_callback
     @servers = [server('cap1'), server('cap2')]
   end
 
   def teardown
-    Capissh::Command.default_io_proc = @original_io_proc
+    Capissh::Command.default_io_callback = @original_io_callback
   end
 
   def test_run_options_should_be_passed_to_execute_on_servers
@@ -58,20 +58,20 @@ class InvocationTest < Minitest::Test
     assert_equal({:foo => "bar", :shell => "/bin/sh"}, @invocation.add_default_command_options(:foo => "bar", :shell => "/bin/sh"))
   end
 
-  def test_default_io_proc_should_log_stdout_arguments_as_info
+  def test_default_io_callback_should_log_stdout_arguments_as_info
     ch = { :host => "capissh",
            :server => server("capissh"),
            :logger => mock("logger") }
     ch[:logger].expects(:info).with("data stuff", "out :: capissh")
-    Capissh::Command.default_io_proc[ch, :out, "data stuff"]
+    Capissh::Command.default_io_callback[ch, :out, "data stuff"]
   end
 
-  def test_default_io_proc_should_log_stderr_arguments_as_important
+  def test_default_io_callback_should_log_stderr_arguments_as_important
     ch = { :host => "capissh",
            :server => server("capissh"),
            :logger => mock("logger") }
     ch[:logger].expects(:important).with("data stuff", "err :: capissh")
-    Capissh::Command.default_io_proc[ch, :err, "data stuff"]
+    Capissh::Command.default_io_callback[ch, :err, "data stuff"]
   end
 
   def test_sudo_should_default_to_sudo

@@ -115,7 +115,7 @@ module Capissh
       if options[:eof].nil? && !cmd.include?(sudo_command)
         options = options.merge(:eof => !block_given?)
       end
-      block ||= Command.default_io_proc
+      block ||= Command.default_io_callback
       tree = CommandTree.twig(configuration, cmd, options, &block)
       run_tree(servers, tree, options)
     end

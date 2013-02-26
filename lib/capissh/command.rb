@@ -10,7 +10,7 @@ module Capissh
     attr_reader :tree, :sessions, :options
 
     class << self
-      attr_accessor :default_io_proc
+      attr_accessor :default_io_callback
 
       def process_tree(tree, sessions, options={})
         new(tree, options).call(sessions)
@@ -25,7 +25,7 @@ module Capissh
       end
     end
 
-    self.default_io_proc = Proc.new do |ch, stream, out|
+    self.default_io_callback = Proc.new do |ch, stream, out|
       if ch[:logger]
         level = stream == :err ? :important : :info
         ch[:logger].send(level, out, "#{stream} :: #{ch[:server]}")
@@ -94,7 +94,7 @@ module Capissh
 
       def open_channels(session)
         server = session.xserver
-        @tree.base_command_and_callback(server).map do |command, io_proc|
+        @tree.base_command_and_callback(server).map do |command, io_callback|
           session.open_channel do |channel|
             options[:env].each { |key, value| channel.env key, value } if options[:env]
             
@@ -102,7 +102,7 @@ module Capissh
             channel[:options] = options
             channel[:logger] = logger
             channel[:command] = command
-            channel[:io_proc] = io_proc
+            channel[:io_callback] = io_callback
 
             request_pty_if_necessary(channel) do |ch|
               logger.trace "executing command", ch[:server] if logger
@@ -112,11 +112,11 @@ module Capissh
             end
 
             channel.on_data do |ch, data|
-              ch[:io_proc].call(ch, :out, data)
+              ch[:io_callback].call(ch, :out, data)
             end
 
             channel.on_extended_data do |ch, type, data|
-              ch[:io_proc].call(ch, :err, data)
+              ch[:io_callback].call(ch, :err, data)
             end
 
             channel.on_request("exit-status") do |ch, data|

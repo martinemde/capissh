@@ -13,7 +13,7 @@ module Capissh
 
       def initialize(command, options, callback)
         @command = command.strip.gsub(/\r?\n/, "\\\n")
-        @callback = callback || Capissh::Command.default_io_proc
+        @callback = callback || Capissh::Command.default_io_callback
         @options = options
         @skip = false
       end
