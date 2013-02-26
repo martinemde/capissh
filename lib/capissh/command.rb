@@ -7,8 +7,6 @@ module Capissh
   # This class encapsulates a single command to be executed on a set of remote
   # machines, in parallel.
   class Command
-    attr_reader :tree, :sessions, :options
-
     class << self
       attr_accessor :default_io_callback
 
@@ -32,17 +30,16 @@ module Capissh
       end
     end
 
-    # Instantiates a new command object. The +command+ must be a string
-    # containing the command to execute. +sessions+ is an array of Net::SSH
-    # session instances, and +options+ must be a hash containing any of the
-    # following keys:
+    attr_reader :tree, :options
+
+    # Instantiates a new command object.
     #
-    # * +shell+: (optional), the shell (eg. 'bash') or false. Default: 'sh'
+    # The +command+ must be a string containing the command to execute.
+    # +options+ must be a hash containing any of the following keys:
+    #
     # * +logger+: (optional), a Capissh::Logger instance
     # * +data+: (optional), a string to be sent to the command via it's stdin
     # * +eof+: (optional), close stdin after sending data
-    # * +env+: (optional), a string or hash to be interpreted as environment
-    #   variables that should be defined for this command invocation.
     # * +pty+: (optional), execute the command in a pty
     def initialize(tree, options={})
       @tree = tree
@@ -70,20 +67,18 @@ module Capissh
 
       failed = channels.select { |ch| ch[:status] != 0 }
       if failed.any?
-        commands = failed.inject({}) do |map, ch|
-          map[ch[:command]] ||= []
-          map[ch[:command]] << ch[:server]
-          map
-        end
-        message = commands.map do |command, list|
-          "#{command.inspect} on #{list.join(',')}"
-        end
-        error = CommandError.new("failed: #{message.join("; ")}")
-        error.hosts = commands.values.flatten
-        raise error
+        handle_failed(failed)
       end
 
       self
+    end
+
+    def handle_failed(failed)
+      commands = failed.group_by { |ch| ch[:command] }
+      message = commands.map { |command, channels| "#{command.inspect} on #{channels.map{|ch| ch[:server]}.join(',')}" }
+      error = CommandError.new("failed: #{message.join("; ")}")
+      error.hosts = failed.map { |ch| ch[:server] }.uniq
+      raise error
     end
 
     private
