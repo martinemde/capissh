@@ -1,7 +1,7 @@
 require "test_helper"
 require 'capissh/connection_manager'
 
-class ConnectionManagerTest < MiniTest::Unit::TestCase
+class ConnectionManagerTest < Minitest::Test
   def setup
     @options = {:logger => stub_everything}
     @connection_manager = Capissh::ConnectionManager.new(@options)

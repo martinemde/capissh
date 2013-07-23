@@ -1,7 +1,7 @@
 require 'test_helper'
 require 'capissh/server_definition'
 
-class ServerDefinitionTest < MiniTest::Unit::TestCase
+class ServerDefinitionTest < Minitest::Test
   def test_new_without_credentials_or_port_should_set_values_to_defaults
     server = Capissh::ServerDefinition.new("www.capissh.test")
     assert_equal "www.capissh.test", server.host
