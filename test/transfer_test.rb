@@ -2,7 +2,7 @@ require 'test_helper'
 require 'capissh/transfer'
 require 'capissh/sessions'
 
-class TransferTest < MiniTest::Unit::TestCase
+class TransferTest < Minitest::Test
   def test_class_process_should_delegate_to_instance_process
     transfer = mock('transfer')
     transfer.expects(:call).with(%w(a b c))

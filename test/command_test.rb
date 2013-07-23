@@ -2,7 +2,7 @@ require "test_helper"
 require 'capissh/command'
 require 'capissh/configuration'
 
-class CommandTest < MiniTest::Unit::TestCase
+class CommandTest < Minitest::Test
   def tree(cmd, options={}, &block)
     Capissh::CommandTree.twig(nil, cmd, options, &block)
   end

@@ -1,7 +1,7 @@
 require 'test_helper'
 require 'capissh/ssh'
 
-class SSHTest < MiniTest::Unit::TestCase
+class SSHTest < Minitest::Test
   def setup
     Capissh::ServerDefinition.stubs(:default_user).returns("default-user")
     @options = { :password => nil,

@@ -6,7 +6,6 @@ if ENV['COVERAGE']
   SimpleCov.start
 end
 
-require 'minitest/spec'
 require 'minitest/autorun'
 require 'mocha/setup'
 
@@ -18,7 +17,7 @@ module TestExtensions
   end
 end
 
-class MiniTest::Unit::TestCase
+class Minitest::Test
   include TestExtensions
 end
 

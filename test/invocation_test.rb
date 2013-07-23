@@ -1,7 +1,7 @@
 require "test_helper"
 require 'capissh/configuration'
 
-class InvocationTest < MiniTest::Unit::TestCase
+class InvocationTest < Minitest::Test
   def setup
     @logger = stub_everything
     @configuration = Capissh::Configuration.new(:logger => @logger)
