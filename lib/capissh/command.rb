@@ -96,6 +96,8 @@ module Capissh
         server = session.xserver
         @tree.base_command_and_callback(server).map do |command, io_proc|
           session.open_channel do |channel|
+            options[:env].each { |key, value| channel.env key, value } if options[:env]
+            
             channel[:server] = server
             channel[:options] = options
             channel[:logger] = logger
