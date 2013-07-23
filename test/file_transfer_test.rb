@@ -1,7 +1,7 @@
 require "test_helper"
 require 'capissh/file_transfers'
 
-class FileTransfersTest < MiniTest::Unit::TestCase
+class FileTransfersTest < Minitest::Test
   def setup
     @logger = stub_everything
     @configuration = stub("Configuration")

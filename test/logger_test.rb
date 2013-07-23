@@ -2,7 +2,7 @@ require "test_helper"
 require 'capissh/logger'
 require 'stringio'
 
-class LoggerTest < MiniTest::Unit::TestCase
+class LoggerTest < Minitest::Test
   def setup
     @io = StringIO.new
     # Turn off formatting for these tests. Formatting is tested in `logger_formatting_test.rb`.

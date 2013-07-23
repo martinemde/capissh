@@ -10,7 +10,7 @@ Capissh::Logger.class_eval do
   end
 end
 
-class LoggerFormattingTest < MiniTest::Unit::TestCase
+class LoggerFormattingTest < Minitest::Test
   def setup
     @io = StringIO.new
     @io.stubs(:tty?).returns(true)
